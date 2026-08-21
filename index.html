@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unified PF Management System</title>
+    <style>
+        :root {
+            --primary-color: #0f172a;
+            --secondary-color: #1e3a8a;
+            --light-bg: #f8fafc;
+            --border-color: #cbd5e1;
+            --yellow:#ffff00; --pink:#fde2e2; --blue:#dbeafe; --red:#dc2626;
+        }
+
+        .panel{background:#f1f5f9;border:1px solid var(--border-color);border-radius:6px;padding:14px 16px;margin-bottom:16px;}
+        .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;}
+        .fg{display:flex;flex-direction:column;}
+        .fg label{font-weight:600;font-size:.78rem;color:#475569;margin-bottom:4px;}
+        .fg input,.fg select{padding:6px 8px;border:1px solid var(--border-color);border-radius:5px;font-size:.85rem;}
+        .btn-add{padding:9px 18px;font-size:.88rem;font-weight:600;border:none;border-radius:6px;cursor:pointer;color:#fff;background:#1e3a8a;}
+        .btn-del{padding:4px 10px;font-size:.75rem;font-weight:600;border:none;border-radius:6px;cursor:pointer;color:#fff;background:#dc2626;}
+        .btn-row{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;}
+        
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--light-bg);
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1350px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        h2 {
+            color: var(--secondary-color);
+            border-bottom: 2px solid var(--secondary-color);
+            padding-bottom: 8px;
+            margin-top: 0;
+        }
+
+        .grid-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #475569;
+            font-size: 0.85rem;
+        }
+
+        input, select {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .btn-group {
+            margin: 20px 0;
+            display: flex;
+            gap: 12px;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-generate { background-color: var(--secondary-color); color: white; }
+        .btn-print { background-color: #059669; color: white; }
+
+        .output-box {
+            background-color: #f1f5f9;
+            padding: 12px;
+            border-left: 4px solid var(--secondary-color);
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            margin-top: 10px;
+        }
+
+        th {
+            background-color: #1e293b;
+            color: white;
+            padding: 8px 6px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        td {
+            padding: 6px;
+            border: 1px solid var(--border-color);
+            vertical-align: middle;
+            text-align: center;
+        }
+
+        tr:nth-child(even) { background-color: #f8fafc; }
+    
+        @media print {
+            @page { size: A4 landscape; margin: 8mm; }
+            body { background:#fff !important; padding:0 !important; margin:0 !important; }
+            body * { visibility:hidden !important; }
+            #pfPrintArea, #pfPrintArea * { visibility:visible !important; }
+            #pfPrintArea {
+                position:absolute !important;
+                left:0 !important; top:0 !important;
+                width:100% !important;
+                margin:0 !important; padding:0 !important;
+            }
+            #pfPrintArea > h3 {
+                border-top:0 !important;
+                padding-top:0 !important;
+                margin:0 0 5mm 0 !important;
+                font-size:14pt !important;
+            }
+            #pfPrintArea .panel {
+                border:0 !important;
+                padding:0 !important;
+                margin:0 !important;
+                background:#fff !important;
+            }
+            #pfPrintArea .grid-inputs,
+            #pfPrintArea .btn-row,
+            #pfPrintArea button,
+            #pfPrintArea input[type="file"],
+            #pfPrintArea #pfSaveStatus {
+                display:none !important;
+            }
+            #pfPrintArea table {
+                width:100% !important;
+                font-size:8.5pt !important;
+                margin-top:2mm !important;
+                page-break-inside:auto;
+            }
+            #pfPrintArea th, #pfPrintArea td {
+                padding:3px 4px !important;
+                border:1px solid #444 !important;
+            }
+            #pfPrintArea tr { page-break-inside:avoid; }
+            #pfPrintArea .output-box {
+                border:1px solid #777 !important;
+                background:#fff !important;
+                padding:4px !important;
+                margin:0 0 3mm 0 !important;
+                font-size:8.5pt !important;
+            }
+            #pfPrintArea input {
+                border:0 !important;
+                background:transparent !important;
+                padding:0 !important;
+                font-size:8.5pt !important;
+                width:auto !important;
+            }
+        }
+        .pf-staff-header{margin-top:10px;margin-bottom:12px;}
+        .staff-info-table{width:100%;border-collapse:collapse;font-size:.9rem;background:#fff;}
+        .staff-info-table th,.staff-info-table td{border:1px solid #334155;padding:8px;text-align:center;}
+        .staff-info-table th{background:#1e293b;color:#fff;font-weight:700;}
+        .staff-info-table td{font-weight:700;background:#f8fafc;}
+        @media print{
+            @page{size:A4 landscape;margin:8mm;}
+            body{background:#fff!important;padding:0!important;margin:0!important;}
+            body *{visibility:hidden;}
+            #pfStaffHeader,#pfStaffHeader *,#pfTable2025,#pfTable2025 *{visibility:visible;}
+            #pfStaffHeader,#pfTable2025{position:relative;width:100%;}
+            #pfStaffHeader{margin:0 0 5mm 0;}
+            #pfTable2025{font-size:9px!important;margin-top:0;}
+            #pfTable2025 th,#pfTable2025 td{padding:3px!important;}
+            #pfTable2025 input{border:none;background:transparent;font-size:9px;text-align:center;}
+            #pfTable2025 th{background:#1e293b!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+            .staff-info-table{font-size:10px;}
+            .staff-info-table th,.staff-info-table td{padding:4px;}
+        }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Unified ROPA Pay Fixation & PF Management Dashboard</h2>
+
+    <h3>1. Staff & Service Details</h3>
+    <div class="grid-inputs">
+        <div class="form-group">
+            <label>Name of the School</label>
+            <input type="text" id="schoolName" value="TALDANGRA FULMATI HIGH SCHOOL [H.S.]">
+        </div>
+        <div class="form-group">
+            <label>Name of the Staff</label>
+            <input type="text" id="staffName" value="PRABIR KUMAR DANGAR ; H,M,">
+        </div>
+        <div class="form-group">
+            <label>Designation</label>
+            <input type="text" id="designation" value="Headmaster">
+        </div>
+        <div class="form-group">
+            <label>Date of Joining (1st Joining)</label>
+            <input type="date" id="doj" value="2008-09-24">
+        </div>
+        <div class="form-group">
+            <label>Date of Birth</label>
+            <input type="date" id="dob" value="">
+        </div>
+        <div class="form-group">
+            <label>Date of Retirement (DOR)</label>
+            <input type="date" id="dor" value="">
+        </div>
+        <div class="form-group">
+            <label>Joining in this School</label>
+            <input type="date" id="schoolJoining" value="">
+        </div>
+        <div class="form-group">
+            <label>IOSMS ID</label>
+            <input type="text" id="iosmsId" readonly>
+        </div>
+        <div class="form-group">
+            <label>NGIPF A/C No.</label>
+            <input type="text" id="ngipfAc" readonly>
+        </div>
+    </div>
+
+    <!-- PROVIDENT FUND (PF) 2025-26 WINDOW -->
+    <section id="pfPrintArea">
+<h3 style="margin-top:30px;border-top:3px solid var(--secondary-color);padding-top:20px;">7. Provident Fund (PF) Calculation & Auto-Contribution (2025–26)</h3>
+    <div class="panel" style="background:#ecfdf5;border:2px solid #10b981;">
+        <div style="font-weight:800;font-size:1rem;color:#065f46;margin-bottom:8px;">PF A/C No. 8 — Financial Year 2025–26 Setup & Management</div>
+        
+        <!-- Save/Load & Employee Controls -->
+        <div class="grid-inputs" style="background:#fff;padding:12px;border-radius:6px;border:1px solid #cbd5e1;margin-bottom:15px;">
+            <div class="form-group">
+                <label>Select Staff Member</label>
+                <select id="pfEmpSelect" onchange="onPfEmployeeSelect()">
+                    <!-- Populated via JS -->
+                </select>
+            </div>
+            <div class="form-group" style="display:flex;align-items:end;gap:6px;flex-wrap:wrap;">
+                <button type="button" class="btn-print" onclick="savePfRecord()">💾 Save Staff Record</button>
+                <button type="button" class="btn-print" style="background:#0f766e;" onclick="printPfStatement()">🖨 Print PF Statement (A4 Landscape)</button>
+                <button type="button" class="btn-add" onclick="addNewPfEmployee()">＋ Add New Emp</button>
+                <button type="button" class="btn-del" onclick="deletePfRecord()">🗑 Delete</button>
+            </div>
+            <div class="form-group" style="display:flex;align-items:end;gap:6px;flex-wrap:wrap;">
+                <button type="button" class="btn-add" style="background:#7c3aed;" onclick="exportAllPfJson()">⇩ Export All JSON</button>
+                <button type="button" class="btn-add" style="background:#475569;" onclick="document.getElementById('pfJsonImport').click()">⇧ Import JSON</button>
+                <button type="button" class="btn-print" onclick="printPFStatement()">🖨 Print PF Statement</button>
+                <input type="file" id="pfJsonImport" accept="application/json,.json" style="display:none;" onchange="importAllPfJson(event)">
+            </div>
+        </div>
+        <div id="pfSaveStatus" style="font-size:.8rem;font-weight:700;color:#065f46;margin-bottom:10px;"></div>
+
+        <div class="grid-inputs">
+            <div class="form-group">
+                <label>Opening Balance (OB) for 2025–26 (₹) [from 2024–25 Actual CB]</label>
+                <input type="number" id="pfOb2025" value="4227729" step="1" oninput="calculatePF2025_26()">
+            </div>
+            <div class="form-group">
+                <label>Default Monthly Deposit after 15th (₹)</label>
+                <input type="number" id="pfDefaultMonthlyDep" value="30000" step="1" oninput="applyDefaultMonthlyToAll()">
+            </div>
+            <div class="form-group">
+                <label>Default Rate of Interest (% p.a.)</label>
+                <input type="number" id="pfRoi" value="7.1" step="0.01" oninput="applyDefaultRoiToAll()">
+            </div>
+        </div>
+
+        <div id="pfStaffHeader" class="pf-staff-header">
+            <table class="staff-info-table">
+                <tr>
+                    <th>Name of Staff</th>
+                    <th>Designation</th>
+                    <th>DOB</th>
+                    <th>DOR</th>
+                    <th>1st Joining</th>
+                    <th>Joining in School</th>
+                    <th>IOSMS ID</th>
+                    <th>NGIPF A/C No.</th>
+                    <th>Opening Balance (2025–26)</th>
+                </tr>
+                <tr>
+                    <td id="printStaffName">—</td>
+                    <td id="printDesignation">—</td>
+                    <td id="printDOB">—</td>
+                    <td id="printDOR">—</td>
+                    <td id="printDOJ">—</td>
+                    <td id="printSchoolJoining">—</td>
+                    <td id="printIOSMS">—</td>
+                    <td id="printNGIPF">—</td>
+                    <td id="printOB">₹ 0</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="table-responsive" style="margin-top:10px;">
+            <table id="pfTable2025">
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th>Opening Balance (₹)</th>
+                        <th>ROI (% p.a.)</th>
+                        <th>Deposited within 15th (₹)</th>
+                        <th>Deposited after 15th (₹)</th>
+                        <th>Withdrawals (₹)</th>
+                        <th>Lowest Balance for Interest<br>(OB + Within 15th - WD)</th>
+                        <th>Accrued Monthly Interest (₹)</th>
+                        <th>Running Monthly Balance<br>(OB + All Dep - WD)</th>
+                    </tr>
+                </thead>
+                <tbody id="pfTableBody2025">
+                    <!-- Populated via JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+</div>
+
+<script>
+// Correct 2024-25 Closing Balances extracted from PF TFHS_2024-25[ALL].xlsx as 2025-26 OB
+const pfMasterFromExcel = [{"name": "PRABIR KUMAR DANGAR", "designation": "HM", "iosms": "JVMK0539", "ngipf": "ESS199702748"}, {"name": "SWAPAN KUMAR MAJI", "designation": "AHM", "iosms": "OTCJ3577", "ngipf": "ESS199200402"}, {"name": "AMAL CHANDRA SARDAR", "designation": "AT", "iosms": "OMQL6690", "ngipf": "ESS199100438"}, {"name": "ANTARA GHORAI", "designation": "AT", "iosms": "ABAE7411", "ngipf": "ESS200501571"}, {"name": "BELA MAHATA", "designation": "AT", "iosms": "LPCT9358", "ngipf": "ESS200401235"}, {"name": "BIDHAN CHANDRA GHOSH", "designation": "AT", "iosms": "AXYN2334", "ngipf": "ESS200902166"}, {"name": "DIPTIMAN SAHA", "designation": "AT", "iosms": "JDMU7116", "ngipf": "ESS200801986"}, {"name": "KABITA MANDAL", "designation": "AT", "iosms": "TUEO5927", "ngipf": "ESS200801990"}, {"name": "KANAI LAL GHOSH", "designation": "AT", "iosms": "DLNB0110", "ngipf": "ESS199701657"}, {"name": "KANTI MALLA", "designation": "AT", "iosms": "UVJO0237", "ngipf": "ESS200801988"}, {"name": "MAHIM KUMAR PAINE", "designation": "AT", "iosms": "WMAO0787", "ngipf": "ESS200803846"}, {"name": "MALATI TUDU", "designation": "AT", "iosms": "FBJW5262", "ngipf": "ESS202100509"}, {"name": "MRINMAYEE CHAKRABORTY", "designation": "AT", "iosms": "MEAB3695", "ngipf": "ESS200703254"}, {"name": "PAPIYA MAJI", "designation": "AT", "iosms": "AMAF7542", "ngipf": "ESS201803774"}, {"name": "PARTHA KUMAR PATRA", "designation": "AT", "iosms": "HKQT4659", "ngipf": "ESS200703252"}, {"name": "PARTHA MISHRA", "designation": "AT", "iosms": "AHFT9812", "ngipf": "ESS201303372"}, {"name": "RANJAN KUMAR GHOSH", "designation": "AT", "iosms": "GMGE2501", "ngipf": "ESS199500670"}, {"name": "SABYASACHI MANDAL", "designation": "AT", "iosms": "YHZN6632", "ngipf": "ESS200703255"}, {"name": "SAHADEB BASKEY", "designation": "AT", "iosms": "TVZU4697", "ngipf": "ESS200501572"}, {"name": "SAMPA PATI", "designation": "AT", "iosms": "VWYY4294", "ngipf": "ESS201905054"}, {"name": "SANJOY DANGAR", "designation": "AT", "iosms": "ZCBF2235", "ngipf": "ESS201307089"}, {"name": "SASANKA SAREN", "designation": "AT", "iosms": "XOFX4098", "ngipf": "ESS202100179"}, {"name": "SHEPHALI MAJI", "designation": "AT", "iosms": "HWFI9336", "ngipf": "ESS200101438"}, {"name": "SUJATA MAHATA", "designation": "AT", "iosms": "XHFX8193", "ngipf": "ESS201002399"}, {"name": "SUMANTA MANDAL", "designation": "AT", "iosms": "KAZD4948", "ngipf": "ESS201801666"}, {"name": "SWAPNA MAHANTI", "designation": "AT", "iosms": "NCIZ8216", "ngipf": "ESS200902169"}, {"name": "TANMOY CHAKRABORTY", "designation": "AT", "iosms": "PTHV6090", "ngipf": "ESS200501567"}, {"name": "TAPAS KUMAR GARAI", "designation": "AT", "iosms": "TJSX1404", "ngipf": "ESS199901409"}, {"name": "TAPAS KUNDU", "designation": "AT", "iosms": "XTCJ8807", "ngipf": "ESS200902170"}, {"name": "TUHIN SUBHRA PATRA", "designation": "LIBRARIAN", "iosms": "VCDS2789", "ngipf": "ESS201201149"}, {"name": "SUBHENDU KARMAKAR", "designation": "CLERK", "iosms": "YTTP2941", "ngipf": "ESS200001089"}, {"name": "SUMANTA DULE", "designation": "CLERK", "iosms": "ZFJO0285", "ngipf": "ESS201801672"}, {"name": "KEYA DEY", "designation": "GROUP D", "iosms": "OLPC4004", "ngipf": "ESS201801673"}, {"name": "NIRANJAN MURMU", "designation": "GROUP D", "iosms": "BBGV1929", "ngipf": "ESS199800724"}, {"name": "PRAKASH SARDAR", "designation": "GROUP D", "iosms": "PCHJ4347", "ngipf": "ESS201201153"}, {"name": "TAPAN KUMAR DIYASI", "designation": "GROUP D", "iosms": "VTXO9847", "ngipf": "ESS199500671"}];
+
+const serviceMaster = [
+ {name:"PRABIR KUMAR DANGAR", designation:"HEADMASTER", group:"Gr-A", dob:"1969-04-10", dor:"2029-04-30", firstJoining:"1997-10-06", schoolJoining:"2019-07-25"},
+ {name:"SWAPAN KUMAR MAJI", designation:"ASSISTANT HEADMASTER", group:"Gr-A", dob:"1970-11-25", dor:"2030-11-30", firstJoining:"1992-01-01", schoolJoining:"1997-06-28"},
+ {name:"AMAL CHANDRA SARDAR", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1966-05-12", dor:"2026-05-31", firstJoining:"1991-01-17", schoolJoining:"1995-09-01"},
+ {name:"PARTHA KUMAR PATRA", designation:"ASSISTANT TEACHER", group:"Gr-B", dob:"1983-06-19", dor:"2043-06-30", firstJoining:"2007-10-04", schoolJoining:"2007-10-04"},
+ {name:"MAHIM KUMAR PAINE", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1982-08-02", dor:"2042-08-31", firstJoining:"2008-09-11", schoolJoining:"2008-09-11"},
+ {name:"KABITA MANDAL", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1981-04-06", dor:"2041-04-30", firstJoining:"2008-09-13", schoolJoining:"2008-09-13"},
+ {name:"TAPAS KUNDU", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1969-09-25", dor:"2029-09-30", firstJoining:"2009-01-30", schoolJoining:"2009-01-30"},
+ {name:"MRINMAYEE CHAKRABORTY", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1982-02-18", dor:"2042-02-28", firstJoining:"2007-10-15", schoolJoining:"2009-10-27"},
+ {name:"BIDHAN CHANDRA GHOSH", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1983-01-17", dor:"2043-01-31", firstJoining:"2009-09-01", schoolJoining:"2009-09-01"},
+ {name:"PARTHA MISHRA", designation:"ASSISTANT TEACHER", group:"Gr-B", dob:"1990-02-12", dor:"2050-02-28", firstJoining:"2013-12-02", schoolJoining:"2017-11-16"},
+ {name:"SAHADEB BASKEY", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1980-11-21", dor:"2040-11-30", firstJoining:"2005-05-18", schoolJoining:"2011-07-05"},
+ {name:"TANMOY CHAKRABORTY", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1982-11-02", dor:"2042-11-30", firstJoining:"2005-07-05", schoolJoining:"2011-07-01"},
+ {name:"SUJATA MAHATA", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1984-03-30", dor:"2044-03-31", firstJoining:"2010-08-09", schoolJoining:"2013-11-29"},
+ {name:"BELA MAHATA", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1974-07-02", dor:"2034-07-31", firstJoining:"2004-10-14", schoolJoining:"2014-12-23"},
+ {name:"PAPIYA MAJI", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1991-05-16", dor:"2051-05-31", firstJoining:"2018-09-11", schoolJoining:"2018-09-11"},
+ {name:"SUMANTA MANDAL", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1990-12-03", dor:"2050-12-31", firstJoining:"2018-09-12", schoolJoining:"2018-09-12"},
+ {name:"SAMPA PATI", designation:"ASSISTANT TEACHER", group:"Gr-B", dob:"1992-03-26", dor:"2052-03-31", firstJoining:"2019-01-09", schoolJoining:"2019-01-09"},
+ {name:"ANTARA GHORAI", designation:"ASSISTANT TEACHER", group:"Gr-B", dob:"1978-12-07", dor:"2038-12-31", firstJoining:"2005-04-11", schoolJoining:"2021-02-20"},
+ {name:"MALATI TUDU", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1992-11-16", dor:"2052-11-30", firstJoining:"2021-02-26", schoolJoining:"2021-02-26"},
+ {name:"SASANKA SAREN", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1994-02-09", dor:"2054-02-28", firstJoining:"2021-02-26", schoolJoining:"2021-02-26"},
+ {name:"SWAPNA MAHANTI", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1978-10-12", dor:"2038-10-31", firstJoining:"2009-09-07", schoolJoining:"2021-09-24"},
+ {name:"KANTI MALLA", designation:"ASSISTANT TEACHER", group:"Gr-B", dob:"1984-04-06", dor:"2044-04-30", firstJoining:"2008-10-03", schoolJoining:"2021-11-13"},
+ {name:"SABYASACHI MANDAL", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1982-02-16", dor:"2042-02-28", firstJoining:"2007-09-20", schoolJoining:"2022-01-04"},
+ {name:"SHEPHALI MAJI", designation:"ASSISTANT TEACHER", group:"Gr-A", dob:"1977-11-13", dor:"2037-11-30", firstJoining:"2001-05-02", schoolJoining:"2022-06-29"},
+ {name:"DIPTIMAN SAHA", designation:"ASSISTANT TEACHER", group:"Gr-B", dob:"1980-03-28", dor:"2040-03-31", firstJoining:"2008-09-24", schoolJoining:"2022-06-29"},
+ {name:"TUHIN SUBHRA PATRA", designation:"LIBRARIAN", group:"Gr-C", dob:"1979-01-14", dor:"2039-01-31", firstJoining:"2012-04-05", schoolJoining:"2021-09-17"},
+ {name:"SUBHENDU KARMAKAR", designation:"CLERK", group:"Gr-C", dob:"1966-10-07", dor:"2026-10-31", firstJoining:"2000-03-14", schoolJoining:"2000-03-14"},
+ {name:"TAPAN KUMAR DIYASI", designation:"GR.D-STAFF", group:"Gr-D", dob:"1974-02-25", dor:"2034-02-28", firstJoining:"1995-03-14", schoolJoining:"1995-03-14"},
+ {name:"NIRANJAN MURMU", designation:"GR.D-STAFF", group:"Gr-D", dob:"1976-01-01", dor:"2035-12-31", firstJoining:"1998-05-12", schoolJoining:"1998-05-12"},
+ {name:"PRAKASH SARDAR", designation:"GR.D-LAB ATTENDANT", group:"Gr-D", dob:"1985-07-27", dor:"2045-07-31", firstJoining:"2012-11-21", schoolJoining:"2012-11-21"}
+];
+
+const defaultPfStaff = [
+  { name: "PRABIR KUMAR DANGAR ; H,M,", ob: 4235229, defaultDepAfter: 30000 },
+  { name: "RANJAN KUMAR GHOSH; A.T.", ob: 405051, defaultDepAfter: 8500 },
+  { name: "AMAL CHANDRA SARDAR; A.T.", ob: 2921438, defaultDepAfter: 30000 },
+  { name: "SWAPAN KUMAR MAJI; A.T.", ob: 3334183, defaultDepAfter: 25000 },
+  { name: "TAPAS KUMAR GARAI; A.T.", ob: 150307, defaultDepAfter: 8500 },
+  { name: "PARTHA KUMAR PATRA; A.T.", ob: 1012909, defaultDepAfter: 10000 },
+  { name: "MAHIM KUMAR PAINE; A.T.", ob: 1093956, defaultDepAfter: 10000 },
+  { name: "KABITA MANDAL; A.T.", ob: 1697401, defaultDepAfter: 15000 },
+  { name: "TAPAS KUNDU; A.T.", ob: 952256, defaultDepAfter: 7500 },
+  { name: "MRINMAYEE CHAKRABORTY; A.T.", ob: 1711541, defaultDepAfter: 15000 },
+  { name: "BIDHAN CHANDRA GHOSH; A.T.", ob: 956922, defaultDepAfter: 5000 },
+  { name: "PARTHA MISHRA; A.T.", ob: 524362, defaultDepAfter: 5000 },
+  { name: "SAHADEB BASKEY; A.T.", ob: 1058821, defaultDepAfter: 5000 },
+  { name: "TANMOY CHAKRABORTY; A.T.", ob: 451190, defaultDepAfter: 8000 },
+  { name: "SUJATA MAHATA; A.T.", ob: 725226, defaultDepAfter: 5000 },
+  { name: "BELA MAHATA; A.T.", ob: 2303488, defaultDepAfter: 20000 },
+  { name: "PAPIYA MAJI; A.T.", ob: 374845, defaultDepAfter: 5000 },
+  { name: "SUMANTA MANDAL; A.T.", ob: 398383, defaultDepAfter: 6000 },
+  { name: "SAMPA PATI; A.T.", ob: 560616, defaultDepAfter: 10000 },
+  { name: "SANJOY DANGAR; A.T.", ob: 360998, defaultDepAfter: 5000 },
+  { name: "SUBHENDU KARMAKAR; CLERK", ob: 1445057, defaultDepAfter: 30000 },
+  { name: "SUMANTA DULE; CLERK", ob: 126468, defaultDepAfter: 2000 },
+  { name: "TAPAN KUMAR DIYASI ; GR-D", ob: 1262204, defaultDepAfter: 15000 },
+  { name: "NIRANJAN MURMU ; GR-D", ob: 449966, defaultDepAfter: 8000 },
+  { name: "PRAKASH SARDAR; GR-D", ob: 214357, defaultDepAfter: 2000 },
+  { name: "KEYA DEY; GR-D", ob: 145145, defaultDepAfter: 2000 },
+  { name: "DIPTIMAN SAHA ; A.T.", ob: 527030, defaultDepAfter: 7000 },
+  { name: "PURNIMA PATRA ;A.T.", ob: 18745, defaultDepAfter: 8500 },
+  { name: "ANTARA GHORAI ;A.T.", ob: 2085887, defaultDepAfter: 30000 },
+  { name: "MALATI TUDU ;A.T.", ob: 203844, defaultDepAfter: 7000 },
+  { name: "SASANKA SAREN ;A.T.", ob: 150613, defaultDepAfter: 4500 },
+  { name: "SWAPNA MAHANTI ; A.T.", ob: 2370448, defaultDepAfter: 20000 },
+  { name: "KANTI  MALLA  ; A.T.", ob: 1208998, defaultDepAfter: 9000 },
+  { name: "SABYASACHI MANDAL  ; A.T.", ob: 1090121, defaultDepAfter: 6000 },
+  { name: "TUHIN SUBHRA PATRA ;Librarian", ob: 945441, defaultDepAfter: 9500 },
+  { name: "SHEPHALI MAJI; A.T.", ob: 0, defaultDepAfter: 25000 }
+];
+
+const STORAGE_KEY = 'TFHS_PF_2025_26_RECORDS_V8';
+let monthlyDepWithinCache = Array(12).fill(0);
+let monthlyDepAfterCache = Array(12).fill(30000);
+let monthlyWdCache = Array(12).fill(0);
+let monthlyRoiCache = Array(12).fill(7.1);
+
+function getSavedRecords() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch (_) { return null; }
+}
+
+function saveRecordsToStorage(records) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+function mergeExcelPfMaster(records) {
+    const source = Array.isArray(records) ? records : [];
+    return source.map((r, i) => {
+        const nm = String(r.name || '').replace(/\s*;.*$/, '').trim().toUpperCase();
+        const m = pfMasterFromExcel.find(x => x.name.toUpperCase() === nm);
+        const sm = serviceMaster.find(x => x.name.toUpperCase() === nm);
+        return { ...r, ...(m ? {name:m.name, designation:m.designation, iosms:m.iosms, ngipf:m.ngipf} : {}), ...(sm ? {designation:sm.designation, group:sm.group, dob:sm.dob, dor:sm.dor, firstJoining:sm.firstJoining, schoolJoining:sm.schoolJoining, doj:sm.firstJoining} : {}) };
+    });
+}
+
+let activeStaffRecords = mergeExcelPfMaster(getSavedRecords() || defaultPfStaff);
+
+// If the saved browser data is old, immediately upgrade it with Excel IOSMS/NGIPF master data.
+saveRecordsToStorage(activeStaffRecords);
+
+function initPfDropdown(selectName = '') {
+    const sel = document.getElementById('pfEmpSelect');
+    sel.innerHTML = activeStaffRecords.map((e, idx) => `<option value="${idx}">${e.name} (OB: ₹ ${Number(e.ob).toLocaleString('en-IN')})</option>`).join('');
+    if (selectName) {
+        const foundIdx = activeStaffRecords.findIndex(e => e.name === selectName);
+        if (foundIdx !== -1) sel.value = foundIdx;
+    }
+}
+
+function onPfEmployeeSelect() {
+    // Save the currently edited staff record before switching to another staff member.
+    if (window._pfCurrentIdx !== undefined && activeStaffRecords[window._pfCurrentIdx]) {
+        persistCurrentPfRecord(false);
+    }
+    const idx = Number(document.getElementById('pfEmpSelect').value);
+    window._pfCurrentIdx = idx;
+    const emp = activeStaffRecords[idx];
+    if (emp) {
+        document.getElementById('pfOb2025').value = emp.ob;
+        const defaultAfter = emp.defaultDepAfter !== undefined ? emp.defaultDepAfter : 8500;
+        document.getElementById('pfDefaultMonthlyDep').value = defaultAfter;
+        document.getElementById('staffName').value = emp.name;
+        document.getElementById('designation').value = emp.designation || deriveDesignation(emp.name);
+        document.getElementById('doj').value = emp.firstJoining || emp.doj || '';
+        document.getElementById('dob').value = emp.dob || '';
+        document.getElementById('dor').value = emp.dor || '';
+        document.getElementById('schoolJoining').value = emp.schoolJoining || '';
+        document.getElementById('iosmsId').value = emp.iosms || '';
+        document.getElementById('ngipfAc').value = emp.ngipf || '';
+        monthlyDepWithinCache = Array.isArray(emp.monthlyDepWithin) && emp.monthlyDepWithin.length === 12 ? [...emp.monthlyDepWithin] : Array(12).fill(0);
+        monthlyDepAfterCache = Array.isArray(emp.monthlyDepAfter) && emp.monthlyDepAfter.length === 12 ? [...emp.monthlyDepAfter] : Array(12).fill(defaultAfter);
+        monthlyWdCache = Array.isArray(emp.monthlyWd) && emp.monthlyWd.length === 12 ? [...emp.monthlyWd] : Array(12).fill(0);
+        const savedRoi = Array.isArray(emp.monthlyRoi) && emp.monthlyRoi.length === 12 ? emp.monthlyRoi : Array(12).fill(emp.roi !== undefined ? emp.roi : 7.1);
+        monthlyRoiCache = [...savedRoi];
+        document.getElementById('pfRoi').value = emp.roi !== undefined ? emp.roi : monthlyRoiCache[0];
+        calculatePF2025_26();
+    }
+}
+
+function deriveDesignation(name) {
+    const s = String(name || '').toUpperCase();
+    if (s.includes('H,M')) return 'Headmaster';
+    if (s.includes('CLERK')) return 'Clerk';
+    if (s.includes('GR-D')) return 'Group-D';
+    if (s.includes('LIBRARIAN')) return 'Librarian';
+    if (s.includes('A.T.')) return 'Assistant Teacher';
+    return '';
+}
+
+function applyDefaultRoiToAll() {
+    const roi = parseFloat(document.getElementById('pfRoi').value) || 0;
+    monthlyRoiCache = Array(12).fill(roi);
+    for (let i=0;i<12;i++) {
+        const el=document.getElementById(`roi_${i}`);
+        if (el) el.value=roi.toFixed(2);
+    }
+    calculatePF2025_26();
+    persistCurrentPfRecord(false);
+}
+
+function updateStaffHeader() {
+    const name = document.getElementById('staffName').value.trim();
+    const designation = document.getElementById('designation').value.trim();
+    const dob = document.getElementById('dob').value;
+    const dor = document.getElementById('dor').value;
+    const doj = document.getElementById('doj').value; // 1st joining
+    const sj = document.getElementById('schoolJoining').value; // joining in this school
+    const ob = Number(document.getElementById('pfOb2025').value) || 0;
+    const fmt = v => v ? new Date(v + 'T00:00:00').toLocaleDateString('en-GB') : '—';
+
+    document.getElementById('printStaffName').textContent = name || '—';
+    document.getElementById('printDesignation').textContent = designation || '—';
+    document.getElementById('printDOB').textContent = fmt(dob);
+    document.getElementById('printDOR').textContent = fmt(dor);
+    document.getElementById('printDOJ').textContent = fmt(doj);
+    document.getElementById('printSchoolJoining').textContent = fmt(sj);
+
+    const idx = window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value);
+    const emp = activeStaffRecords[idx] || {};
+    document.getElementById('printIOSMS').textContent = emp.iosms || document.getElementById('iosmsId').value || '—';
+    document.getElementById('printNGIPF').textContent = emp.ngipf || document.getElementById('ngipfAc').value || '—';
+    document.getElementById('printOB').textContent = '₹ ' + Math.round(ob).toLocaleString('en-IN');
+}
+
+function printPFStatement() {
+    persistCurrentPfRecord(false);
+    updateStaffHeader();
+    window.print();
+}
+
+function applyDefaultMonthlyToAll() {
+    const defDep = parseFloat(document.getElementById('pfDefaultMonthlyDep').value) || 0;
+    monthlyDepAfterCache = Array(12).fill(defDep);
+    for (let i = 0; i < 12; i++) {
+        const input = document.getElementById(`dep_after_${i}`);
+        if (input) input.value = defDep;
+    }
+    calculatePF2025_26();
+}
+
+function updateMonthlyVal(monthIdx, type, val) {
+    const num = parseFloat(val) || 0;
+    if (type === 'within') monthlyDepWithinCache[monthIdx] = num;
+    if (type === 'after') monthlyDepAfterCache[monthIdx] = num;
+    if (type === 'wd') monthlyWdCache[monthIdx] = num;
+    if (type === 'roi') monthlyRoiCache[monthIdx] = num;
+    calculatePF2025_26();
+    // Auto-save every edited monthly value to the selected staff record.
+    persistCurrentPfRecord(false);
+}
+
+function renderPfTableInputs() {
+    const monthNames = ["April 2025", "May 2025", "June 2025", "July 2025", "August 2025", "September 2025", "October 2025", "November 2025", "December 2025", "January 2026", "February 2026", "March 2026"];
+    let ob = parseFloat(document.getElementById('pfOb2025').value) || 0;
+    let defaultRoi = parseFloat(document.getElementById('pfRoi').value) || 7.1;
+    if (!monthlyRoiCache || monthlyRoiCache.length !== 12) monthlyRoiCache = Array(12).fill(defaultRoi);
+
+    let currentBal = ob; // Pure Physical Balance
+    let totalWithin = 0;
+    let totalAfter = 0;
+    let totalWd = 0;
+    let totalInterestExact = 0;
+    let tbodyHtml = "";
+
+    monthNames.forEach((mName, i) => {
+        let monthOp = currentBal;
+        let within15 = monthlyDepWithinCache[i] !== undefined ? monthlyDepWithinCache[i] : 0;
+        let after15 = monthlyDepAfterCache[i] !== undefined ? monthlyDepAfterCache[i] : 0;
+        let wd = monthlyWdCache[i] !== undefined ? monthlyWdCache[i] : 0;
+
+        // PF contribution auto-stops from the month in which the 6-month-before-retirement cutoff falls.
+        const dorStr = document.getElementById('dor').value;
+        let pfContributionStopped = false;
+        if (dorStr) {
+            const retirement = new Date(dorStr + 'T00:00:00');
+            const cutoff = new Date(retirement);
+            cutoff.setMonth(cutoff.getMonth() - 6);
+            // Contribution is stopped from the month in which the exact 6-month-before-retirement date falls.
+            const monthStart = new Date(i < 9 ? 2025 : 2026, i < 9 ? i + 3 : i - 9, 1);
+            const cutoffMonthStart = new Date(cutoff.getFullYear(), cutoff.getMonth(), 1);
+            pfContributionStopped = monthStart >= cutoffMonthStart;
+        }
+        if (pfContributionStopped) { within15 = 0; after15 = 0; }
+
+        // Running balance for the month (DOES NOT include uncredited interest)
+        let closeBal = monthOp + within15 + after15 - wd;
+
+        // Lowest balance eligible for interest calculation (Opening + Deposited within 15th - Withdrawals)
+        let lowestBal = monthOp + within15 - wd;
+        if (lowestBal < 0) lowestBal = 0;
+
+        let monthRoi = Number(monthlyRoiCache[i]);
+        if (!isFinite(monthRoi) || monthRoi < 0) monthRoi = defaultRoi;
+        let monthlyInterest = (lowestBal * ((monthRoi / 100) / 12));
+        
+        totalWithin += within15;
+        totalAfter += after15;
+        totalWd += wd;
+        totalInterestExact += monthlyInterest;
+        currentBal = closeBal;
+
+        tbodyHtml += `
+            <tr>
+                <td><strong>${mName}</strong>${pfContributionStopped ? '<br><small style="color:#b91c1c;font-weight:700;">PF STOPPED (6M BEFORE DOR)</small>' : ''}</td>
+                <td>₹ ${Math.round(monthOp).toLocaleString('en-IN')}</td>
+                <td><input type="number" id="roi_${i}" value="${monthRoi.toFixed(2)}" step="0.01" min="0" style="width:72px;text-align:center;" oninput="updateMonthlyVal(${i}, 'roi', this.value)"></td>
+                <td><input type="number" id="dep_within_${i}" value="${within15}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'within', this.value)"></td>
+                <td><input type="number" id="dep_after_${i}" value="${after15}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'after', this.value)"></td>
+                <td><input type="number" id="wd_${i}" value="${wd}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'wd', this.value)"></td>
+                <td>₹ ${Math.round(lowestBal).toLocaleString('en-IN')}</td>
+                <td>₹ ${monthlyInterest.toFixed(2)}</td>
+                <td><strong>₹ ${Math.round(closeBal).toLocaleString('en-IN')}</strong></td>
+            </tr>`;
+    });
+
+    // End of year processing (Adding Interest to Principal)
+    let totalInterestRounded = Math.round(totalInterestExact); // Standard .5 rule
+    let finalYearEndBalance = currentBal + totalInterestRounded;
+
+    tbodyHtml += `
+        <tr style="background:#fef3c7; border-top: 2px solid #cbd5e1;">
+            <td colspan="7" style="text-align:right; font-weight:bold;">Total Interest Allowed (Credited on 31-03-2026):</td>
+            <td style="font-weight:bold; color:#059669; font-size:0.9rem;">₹ ${totalInterestRounded.toLocaleString('en-IN')}</td>
+            <td></td>
+        </tr>
+        <tr style="background:#1e293b; color:#fff;">
+            <td colspan="8" style="text-align:right; font-weight:bold; font-size:0.9rem;">Final Closing Balance as on 31-03-2026:</td>
+            <td style="font-weight:bold; font-size:1rem; color:#10b981;">₹ ${Math.round(finalYearEndBalance).toLocaleString('en-IN')}</td>
+        </tr>
+    `;
+
+    document.getElementById('pfTableBody2025').innerHTML = tbodyHtml;
+
+
+
+}
+
+function calculatePF2025_26() {
+    updateStaffHeader();
+    renderPfTableInputs();
+}
+
+function persistCurrentPfRecord(showStatus = false) {
+    const idx = window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value);
+    if (!Number.isInteger(idx) || !activeStaffRecords[idx]) return;
+
+    const old = activeStaffRecords[idx];
+    const name = document.getElementById('staffName').value.trim() || old.name;
+    const designation = document.getElementById('designation').value.trim() || deriveDesignation(name);
+    const doj = document.getElementById('doj').value || '';
+    const dob = document.getElementById('dob').value || '';
+    const dor = document.getElementById('dor').value || '';
+    const schoolJoining = document.getElementById('schoolJoining').value || '';
+    const ob = parseFloat(document.getElementById('pfOb2025').value) || 0;
+    const defaultDepAfter = parseFloat(document.getElementById('pfDefaultMonthlyDep').value) || 0;
+    const roi = parseFloat(document.getElementById('pfRoi').value) || 7.1;
+    const iosms = document.getElementById('iosmsId').value.trim() || old.iosms || '';
+    const ngipf = document.getElementById('ngipfAc').value.trim() || old.ngipf || '';
+
+    activeStaffRecords[idx] = {
+        ...old, name, designation, doj, dob, dor, schoolJoining, firstJoining: doj, iosms, ngipf, ob, defaultDepAfter, roi,
+        monthlyDepWithin: [...monthlyDepWithinCache],
+        monthlyDepAfter: [...monthlyDepAfterCache],
+        monthlyWd: [...monthlyWdCache],
+        monthlyRoi: [...monthlyRoiCache]
+    };
+    saveRecordsToStorage(activeStaffRecords);
+
+    if (showStatus) {
+        const status = document.getElementById('pfSaveStatus');
+        status.textContent = `✓ Saved all PF data for ${name}`;
+        setTimeout(() => { status.textContent = ''; }, 3000);
+    }
+}
+
+function savePfRecord() {
+    persistCurrentPfRecord(true);
+    const name = document.getElementById('staffName').value.trim();
+    initPfDropdown(name);
+    window._pfCurrentIdx = Number(document.getElementById('pfEmpSelect').value);
+}
+
+function addNewPfEmployee() {
+    const name = prompt("Enter new employee name & designation (e.g. AMIT DAS ; A.T.):");
+    if (!name) return;
+    const ob = parseFloat(prompt("Enter Opening Balance (OB) for 2025–26 (₹):", "0")) || 0;
+    const defaultDepAfter = parseFloat(prompt("Enter Default Monthly Deposit after 15th (₹):", "5000")) || 5000;
+
+    const designation = deriveDesignation(name);
+    activeStaffRecords.push({ name, designation, doj: '', dob: '', dor: '', schoolJoining: '', firstJoining: '', iosms: '', ngipf: '', ob, defaultDepAfter, roi: 7.1, monthlyDepWithin:Array(12).fill(0), monthlyDepAfter:Array(12).fill(defaultDepAfter), monthlyWd:Array(12).fill(0), monthlyRoi:Array(12).fill(7.1) });
+    saveRecordsToStorage(activeStaffRecords);
+    initPfDropdown(name);
+    onPfEmployeeSelect();
+    const status = document.getElementById('pfSaveStatus');
+    status.textContent = `✓ Added new employee: ${name}`;
+    setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+function deletePfRecord() {
+    const sel = document.getElementById('pfEmpSelect');
+    const idx = sel.value;
+    if (activeStaffRecords.length <= 1) {
+        alert("Cannot delete the last remaining staff record.");
+        return;
+    }
+    const name = activeStaffRecords[idx].name;
+    if (!confirm(`Delete record for ${name}?`)) return;
+
+    activeStaffRecords.splice(idx, 1);
+    saveRecordsToStorage(activeStaffRecords);
+    initPfDropdown();
+    onPfEmployeeSelect();
+    const status = document.getElementById('pfSaveStatus');
+    status.textContent = `✓ Deleted record for ${name}`;
+    setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+function exportAllPfJson() {
+    const data = {
+        exportedAt: new Date().toISOString(),
+        school: document.getElementById('schoolName').value,
+        records: activeStaffRecords
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `TFHS_PF_2025_26_Records_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    const status = document.getElementById('pfSaveStatus');
+    status.textContent = '✓ Exported all employee PF records to JSON.';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+function importAllPfJson(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const parsed = JSON.parse(e.target.result);
+            const recs = parsed.records || (Array.isArray(parsed) ? parsed : null);
+            if (!recs || !Array.isArray(recs)) throw new Error('Invalid JSON format.');
+            activeStaffRecords = recs;
+            saveRecordsToStorage(activeStaffRecords);
+            initPfDropdown();
+            onPfEmployeeSelect();
+            const status = document.getElementById('pfSaveStatus');
+            status.textContent = `✓ Successfully imported ${recs.length} employee records from JSON.`;
+            setTimeout(() => { status.textContent = ''; }, 4000);
+        } catch (err) {
+            alert('Import failed: ' + err.message);
+        } finally { event.target.value = ''; }
+    };
+    reader.readAsText(file);
+}
+
+
+function printPfStatement() {
+    const staff = document.getElementById('staffName').value.trim();
+    const school = document.getElementById('schoolName').value.trim();
+    const oldTitle = document.title;
+    document.title = `${school} - PF Statement - ${staff}`;
+    calculatePF2025_26();
+    setTimeout(() => {
+        window.print();
+        document.title = oldTitle;
+    }, 100);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    initPfDropdown();
+    onPfEmployeeSelect();
+    ['staffName','designation','doj','dob','dor','schoolJoining'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updateStaffHeader);
+        if (el) el.addEventListener('change', updateStaffHeader);
+    });
+});
+</script>
+</body>
+</html>
