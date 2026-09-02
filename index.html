@@ -21,6 +21,39 @@
         .btn-add{padding:9px 18px;font-size:.88rem;font-weight:600;border:none;border-radius:6px;cursor:pointer;color:#fff;background:#1e3a8a;}
         .btn-del{padding:4px 10px;font-size:.75rem;font-weight:600;border:none;border-radius:6px;cursor:pointer;color:#fff;background:#dc2626;}
         .btn-row{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;}
+
+        .auth-bar {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 18px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+        .auth-bar input {
+            padding: 7px 9px;
+            font-size: 13px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+        }
+        .auth-status { font-weight: 600; }
+        .auth-status.signed-in { color: #15803D; }
+        .auth-status.signed-out { color: #B91C1C; }
+        .sync-status { font-size: 12px; color: #64748B; margin-left: auto; }
+        .btn-tiny {
+            padding: 6px 12px;
+            font-size: 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: var(--secondary-color);
+            color: #fff;
+        }
+        .btn-tiny.logout { background: #B91C1C; }
         
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
@@ -208,6 +241,15 @@
 <div class="container">
     <h2>Unified ROPA Pay Fixation & PF Management Dashboard</h2>
 
+    <div class="auth-bar" id="authBar">
+        <span id="authStatus" class="auth-status signed-out">Checking sign-in status…</span>
+        <input type="email" id="authEmail" placeholder="Admin email" style="display:none;">
+        <input type="password" id="authPassword" placeholder="Password" style="display:none;">
+        <button type="button" class="btn-tiny" id="authActionBtn" onclick="handleAuthAction()" style="display:none;">Sign In</button>
+        <button type="button" class="btn-tiny logout" id="authLogoutBtn" onclick="handleSignOut()" style="display:none;">Sign Out</button>
+        <span class="sync-status" id="syncStatus">Connecting to cloud database…</span>
+    </div>
+
     <h3>1. Staff & Service Details</h3>
     <div class="grid-inputs">
         <div class="form-group">
@@ -343,6 +385,37 @@
 </section>
 </div>
 
+<!-- Firebase SDKs (compat build, single-file friendly) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCiqQFsnbSi6eCgUI_W3NTybzIkRmCI_54",
+        authDomain: "tfhs-portal.firebaseapp.com",
+        projectId: "tfhs-portal",
+        storageBucket: "tfhs-portal.firebasestorage.app",
+        messagingSenderId: "316041012204",
+        appId: "1:316041012204:web:04ee8b19374c60f63716c9"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    // Single shared document, matching the rest of the TFHS suite's storage pattern:
+    // one document per tool at /tfhs/{toolName}, holding the whole dataset as a field.
+    const pfDocRef = db.doc("tfhs/pfInterest");
+    let currentUser = null;
+
+    // Tags every write from this browser tab so the real-time listener can tell
+    // "this is just an echo of my own save" (ignore, keep typing undisturbed) apart
+    // from "another device/tab changed the data" (pull it in and refresh the UI).
+    const clientSessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    let writeCounter = 0;
+    let lastSentWriteId = null;
+    let hasLoadedFromCloud = false;
+    let cloudWriteTimer = null;
+</script>
+
 <script>
 // Correct 2024-25 Closing Balances extracted from PF TFHS_2024-25[ALL].xlsx as 2025-26 OB
 const pfMasterFromExcel = [{"name": "PRABIR KUMAR DANGAR", "designation": "HM", "iosms": "JVMK0539", "ngipf": "ESS199702748"}, {"name": "SWAPAN KUMAR MAJI", "designation": "AHM", "iosms": "OTCJ3577", "ngipf": "ESS199200402"}, {"name": "AMAL CHANDRA SARDAR", "designation": "AT", "iosms": "OMQL6690", "ngipf": "ESS199100438"}, {"name": "ANTARA GHORAI", "designation": "AT", "iosms": "ABAE7411", "ngipf": "ESS200501571"}, {"name": "BELA MAHATA", "designation": "AT", "iosms": "LPCT9358", "ngipf": "ESS200401235"}, {"name": "BIDHAN CHANDRA GHOSH", "designation": "AT", "iosms": "AXYN2334", "ngipf": "ESS200902166"}, {"name": "DIPTIMAN SAHA", "designation": "AT", "iosms": "JDMU7116", "ngipf": "ESS200801986"}, {"name": "KABITA MANDAL", "designation": "AT", "iosms": "TUEO5927", "ngipf": "ESS200801990"}, {"name": "KANAI LAL GHOSH", "designation": "AT", "iosms": "DLNB0110", "ngipf": "ESS199701657"}, {"name": "KANTI MALLA", "designation": "AT", "iosms": "UVJO0237", "ngipf": "ESS200801988"}, {"name": "MAHIM KUMAR PAINE", "designation": "AT", "iosms": "WMAO0787", "ngipf": "ESS200803846"}, {"name": "MALATI TUDU", "designation": "AT", "iosms": "FBJW5262", "ngipf": "ESS202100509"}, {"name": "MRINMAYEE CHAKRABORTY", "designation": "AT", "iosms": "MEAB3695", "ngipf": "ESS200703254"}, {"name": "PAPIYA MAJI", "designation": "AT", "iosms": "AMAF7542", "ngipf": "ESS201803774"}, {"name": "PARTHA KUMAR PATRA", "designation": "AT", "iosms": "HKQT4659", "ngipf": "ESS200703252"}, {"name": "PARTHA MISHRA", "designation": "AT", "iosms": "AHFT9812", "ngipf": "ESS201303372"}, {"name": "RANJAN KUMAR GHOSH", "designation": "AT", "iosms": "GMGE2501", "ngipf": "ESS199500670"}, {"name": "SABYASACHI MANDAL", "designation": "AT", "iosms": "YHZN6632", "ngipf": "ESS200703255"}, {"name": "SAHADEB BASKEY", "designation": "AT", "iosms": "TVZU4697", "ngipf": "ESS200501572"}, {"name": "SAMPA PATI", "designation": "AT", "iosms": "VWYY4294", "ngipf": "ESS201905054"}, {"name": "SANJOY DANGAR", "designation": "AT", "iosms": "ZCBF2235", "ngipf": "ESS201307089"}, {"name": "SASANKA SAREN", "designation": "AT", "iosms": "XOFX4098", "ngipf": "ESS202100179"}, {"name": "SHEPHALI MAJI", "designation": "AT", "iosms": "HWFI9336", "ngipf": "ESS200101438"}, {"name": "SUJATA MAHATA", "designation": "AT", "iosms": "XHFX8193", "ngipf": "ESS201002399"}, {"name": "SUMANTA MANDAL", "designation": "AT", "iosms": "KAZD4948", "ngipf": "ESS201801666"}, {"name": "SWAPNA MAHANTI", "designation": "AT", "iosms": "NCIZ8216", "ngipf": "ESS200902169"}, {"name": "TANMOY CHAKRABORTY", "designation": "AT", "iosms": "PTHV6090", "ngipf": "ESS200501567"}, {"name": "TAPAS KUMAR GARAI", "designation": "AT", "iosms": "TJSX1404", "ngipf": "ESS199901409"}, {"name": "TAPAS KUNDU", "designation": "AT", "iosms": "XTCJ8807", "ngipf": "ESS200902170"}, {"name": "TUHIN SUBHRA PATRA", "designation": "LIBRARIAN", "iosms": "VCDS2789", "ngipf": "ESS201201149"}, {"name": "SUBHENDU KARMAKAR", "designation": "CLERK", "iosms": "YTTP2941", "ngipf": "ESS200001089"}, {"name": "SUMANTA DULE", "designation": "CLERK", "iosms": "ZFJO0285", "ngipf": "ESS201801672"}, {"name": "KEYA DEY", "designation": "GROUP D", "iosms": "OLPC4004", "ngipf": "ESS201801673"}, {"name": "NIRANJAN MURMU", "designation": "GROUP D", "iosms": "BBGV1929", "ngipf": "ESS199800724"}, {"name": "PRAKASH SARDAR", "designation": "GROUP D", "iosms": "PCHJ4347", "ngipf": "ESS201201153"}, {"name": "TAPAN KUMAR DIYASI", "designation": "GROUP D", "iosms": "VTXO9847", "ngipf": "ESS199500671"}];
@@ -433,8 +506,34 @@ function getSavedRecords() {
     } catch (_) { return null; }
 }
 
-function saveRecordsToStorage(records) {
+function saveRecordsToStorage(records, pushToCloud = true) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    if (pushToCloud) queueCloudSave(records);
+}
+
+function queueCloudSave(records) {
+    // Debounce: batch up every keystroke's autosave into one Firestore write
+    // ~700ms after the user pauses, instead of writing on every keypress.
+    clearTimeout(cloudWriteTimer);
+    cloudWriteTimer = setTimeout(() => pushRecordsToCloud(records), 700);
+}
+
+function pushRecordsToCloud(records) {
+    if (!currentUser) {
+        document.getElementById("syncStatus").textContent = "Not signed in — changes are saved on this device only";
+        return;
+    }
+    const writeId = clientSessionId + '_' + (++writeCounter);
+    lastSentWriteId = writeId;
+    pfDocRef.set({
+        records: records,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastWriteId: writeId,
+        updatedBy: currentUser.email
+    }, { merge: true }).catch(err => {
+        console.error("Firestore save error:", err);
+        document.getElementById("syncStatus").textContent = "⚠ Cloud save failed — check connection";
+    });
 }
 
 function mergeExcelPfMaster(records) {
@@ -450,7 +549,9 @@ function mergeExcelPfMaster(records) {
 let activeStaffRecords = mergeExcelPfMaster(getSavedRecords() || defaultPfStaff);
 
 // If the saved browser data is old, immediately upgrade it with Excel IOSMS/NGIPF master data.
-saveRecordsToStorage(activeStaffRecords);
+// Local-only (no cloud push) — we don't yet know what the cloud document holds,
+// and pushing here could race ahead of the real-time listener and clobber it.
+saveRecordsToStorage(activeStaffRecords, false);
 
 function initPfDropdown(selectName = '') {
     const sel = document.getElementById('pfEmpSelect');
@@ -790,7 +891,108 @@ window.addEventListener('DOMContentLoaded', () => {
         if (el) el.addEventListener('input', updateStaffHeader);
         if (el) el.addEventListener('change', updateStaffHeader);
     });
+    initFirebaseSync();
 });
+
+// ---------- Firebase Auth & Firestore Sync ----------
+
+function initFirebaseSync() {
+    auth.onAuthStateChanged(user => {
+        currentUser = user;
+        updateAuthUI();
+    });
+
+    pfDocRef.onSnapshot(
+        snapshot => {
+            const data = snapshot.data();
+
+            if (!data || !Array.isArray(data.records)) {
+                // No cloud document yet — seed it from whatever is currently loaded
+                // locally (browser storage / built-in defaults), once signed in.
+                document.getElementById("syncStatus").textContent = hasLoadedFromCloud
+                    ? "Synced — 0 records in cloud ledger"
+                    : "No cloud data yet — using local records";
+                if (!hasLoadedFromCloud && currentUser) {
+                    pushRecordsToCloud(activeStaffRecords);
+                }
+                hasLoadedFromCloud = true;
+                return;
+            }
+
+            document.getElementById("syncStatus").textContent =
+                `Synced — ${data.records.length} staff PF record${data.records.length === 1 ? '' : 's'} in cloud`;
+
+            // Echo of our own recent write — local UI already reflects this data,
+            // so just refresh the silent cache without disturbing whatever field
+            // the admin is currently typing into.
+            if (hasLoadedFromCloud && data.lastWriteId && data.lastWriteId === lastSentWriteId) {
+                activeStaffRecords = mergeExcelPfMaster(data.records);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(activeStaffRecords));
+                return;
+            }
+
+            // First load, or a genuine change from another device/tab — pull it in
+            // and refresh the visible form/table.
+            const currentName = (activeStaffRecords[window._pfCurrentIdx] || {}).name;
+            activeStaffRecords = mergeExcelPfMaster(data.records);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(activeStaffRecords));
+            initPfDropdown(currentName);
+            onPfEmployeeSelect();
+            hasLoadedFromCloud = true;
+        },
+        err => {
+            console.error("Firestore sync error:", err);
+            document.getElementById("syncStatus").textContent = "⚠ Cloud sync error — check connection";
+        }
+    );
+}
+
+function updateAuthUI() {
+    const statusEl = document.getElementById("authStatus");
+    const emailInput = document.getElementById("authEmail");
+    const passInput = document.getElementById("authPassword");
+    const actionBtn = document.getElementById("authActionBtn");
+    const logoutBtn = document.getElementById("authLogoutBtn");
+
+    if (currentUser) {
+        statusEl.textContent = `Signed in as ${currentUser.email} (cloud sync enabled)`;
+        statusEl.className = "auth-status signed-in";
+        emailInput.style.display = "none";
+        passInput.style.display = "none";
+        actionBtn.style.display = "none";
+        logoutBtn.style.display = "inline-block";
+    } else {
+        statusEl.textContent = "Not signed in — edits stay on this device only";
+        statusEl.className = "auth-status signed-out";
+        emailInput.style.display = "inline-block";
+        passInput.style.display = "inline-block";
+        actionBtn.style.display = "inline-block";
+        actionBtn.textContent = "Sign In";
+        logoutBtn.style.display = "none";
+    }
+}
+
+function handleAuthAction() {
+    const email = document.getElementById("authEmail").value.trim();
+    const password = document.getElementById("authPassword").value;
+    if (!email || !password) {
+        alert("Enter both the admin email and password to sign in.");
+        return;
+    }
+    auth.signInWithEmailAndPassword(email, password)
+        .then(() => {
+            document.getElementById("authPassword").value = "";
+            // Push whatever is currently loaded locally up to the cloud right away.
+            pushRecordsToCloud(activeStaffRecords);
+        })
+        .catch(err => {
+            alert("Sign-in failed: " + err.message);
+        });
+}
+
+function handleSignOut() {
+    auth.signOut();
+}
 </script>
 </body>
 </html>
