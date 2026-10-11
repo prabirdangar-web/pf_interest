@@ -8,400 +8,296 @@
         :root {
             --primary-color: #0f172a;
             --secondary-color: #1e3a8a;
-            --light-bg: #f8fafc;
+            --light-bg: #f1f5f9;
             --border-color: #cbd5e1;
-            --yellow:#ffff00; --pink:#fde2e2; --blue:#dbeafe; --red:#dc2626;
         }
-
-        .panel{background:#f1f5f9;border:1px solid var(--border-color);border-radius:6px;padding:14px 16px;margin-bottom:16px;}
-        .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;}
-        .fg{display:flex;flex-direction:column;}
-        .fg label{font-weight:600;font-size:.78rem;color:#475569;margin-bottom:4px;}
-        .fg input,.fg select{padding:6px 8px;border:1px solid var(--border-color);border-radius:5px;font-size:.85rem;}
-        .btn-add{padding:9px 18px;font-size:.88rem;font-weight:600;border:none;border-radius:6px;cursor:pointer;color:#fff;background:#1e3a8a;}
-        .btn-del{padding:4px 10px;font-size:.75rem;font-weight:600;border:none;border-radius:6px;cursor:pointer;color:#fff;background:#dc2626;}
-        .btn-row{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;}
-
-        .auth-bar {
-            background: #fff;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 18px;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 10px;
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--light-bg);
+            color: #1f2937;
+            margin: 0; padding: 0;
             font-size: 13px;
         }
-        .auth-bar input {
-            padding: 7px 9px;
-            font-size: 13px;
-            border: 1px solid var(--border-color);
-            border-radius: 5px;
+
+        /* ===== Layout: icon sidebar on the LEFT + compact main area ===== */
+        .app { display: flex; min-height: 100vh; }
+        .side {
+            width: 64px; flex: 0 0 64px;
+            background: #0f172a;
+            display: flex; flex-direction: column; align-items: center; gap: 3px;
+            padding: 8px 0;
+            position: sticky; top: 0; height: 100vh; overflow-y: auto;
+            scrollbar-width: none;
         }
+        .side::-webkit-scrollbar { display: none; }
+        .side-logo { color: #fff; font-weight: 800; font-size: 15px; letter-spacing: 1px; margin-bottom: 2px; }
+        .side-sep { width: 38px; height: 1px; background: #334155; margin: 3px 0; flex: 0 0 auto; }
+        .ib {
+            width: 54px; border: 0; border-radius: 8px; background: transparent; color: #cbd5e1;
+            cursor: pointer; padding: 5px 0 3px; display: flex; flex-direction: column; align-items: center; gap: 1px;
+            font-family: inherit; flex: 0 0 auto;
+        }
+        .ib:hover { background: #1e293b; color: #fff; }
+        .ib .ic { font-size: 18px; line-height: 1; }
+        .ib .cap { font-size: 9px; font-weight: 600; line-height: 1.15; text-align: center; }
+        .ib.active { background: #065f46; color: #fff; box-shadow: inset 0 0 0 2px #10b981; }
+        .ib.ok:hover { background: #047857; }
+        .ib.danger:hover { background: #991b1b; }
+
+        .main { flex: 1; min-width: 0; padding: 10px 14px; }
+        .topbar {
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+            background: #fff; border: 1px solid var(--border-color); border-radius: 6px;
+            padding: 6px 10px; margin-bottom: 8px;
+        }
+        .topbar h1 { font-size: 15px; margin: 0; color: var(--secondary-color); white-space: nowrap; }
+        .auth-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; margin-left: auto; }
+        .auth-bar input { padding: 4px 6px; font-size: 12px; width: 150px; }
         .auth-status { font-weight: 600; }
         .auth-status.signed-in { color: #15803D; }
         .auth-status.signed-out { color: #B91C1C; }
-        .sync-status { font-size: 12px; color: #64748B; margin-left: auto; }
+        .sync-status { font-size: 11px; color: #64748B; }
         .btn-tiny {
-            padding: 6px 12px;
-            font-size: 12px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            background: var(--secondary-color);
-            color: #fff;
+            padding: 4px 10px; font-size: 12px; border: none; border-radius: 4px; cursor: pointer;
+            background: var(--secondary-color); color: #fff; font-weight: 600;
         }
         .btn-tiny.logout { background: #B91C1C; }
-        
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background-color: var(--light-bg);
-            color: #333;
-            margin: 0;
-            padding: 20px;
-        }
 
-        .container {
-            max-width: 1350px;
-            margin: 0 auto;
-            background: #fff;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        .card {
+            background: #fff; border: 1px solid var(--border-color); border-radius: 6px;
+            padding: 8px 10px; margin-bottom: 8px;
         }
+        .toolrow { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+        .fyChip { font-weight: 700; color: #065f46; font-size: 13px; padding-bottom: 5px; }
+        #pfSaveStatus { font-size: 12px; font-weight: 700; color: #065f46; padding-bottom: 5px; }
+        #fyLinkNote { font-size: 11px; font-weight: 700; color: #7c2d12; padding-bottom: 5px; }
 
-        h2 {
-            color: var(--secondary-color);
-            border-bottom: 2px solid var(--secondary-color);
-            padding-bottom: 8px;
-            margin-top: 0;
-        }
-
-        .grid-inputs {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        label {
-            font-weight: 600;
-            margin-bottom: 6px;
-            color: #475569;
-            font-size: 0.85rem;
-        }
-
+        .cgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 10px; }
+        .fg { display: flex; flex-direction: column; }
+        .fg label { font-weight: 600; font-size: 10.5px; color: #475569; margin-bottom: 2px; }
         input, select {
-            padding: 8px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 0.9rem;
-            outline: none;
+            padding: 4px 6px; border: 1px solid var(--border-color); border-radius: 4px;
+            font-size: 12px; outline: none; font-family: inherit;
         }
+        input:focus, select:focus { border-color: #1e3a8a; }
+        input[readonly] { background: #f1f5f9; }
+        details > summary { cursor: pointer; font-weight: 700; font-size: 12px; color: var(--secondary-color); }
+        details[open] > summary { margin-bottom: 6px; }
 
-        .btn-group {
-            margin: 20px 0;
-            display: flex;
-            gap: 12px;
+        .intbar {
+            display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+            background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px;
+            padding: 6px 10px; margin-bottom: 8px; font-size: 12px;
         }
+        .intbar b { font-size: 13px; }
+        .intbar input { width: 90px; text-align: right; }
+        .intbar .btn-tiny { background: #b45309; }
 
-        button {
-            padding: 12px 24px;
-            font-size: 1rem;
-            font-weight: 600;
-            border-radius: 6px;
-            cursor: pointer;
-            border: none;
+        .strip {
+            background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 5px;
+            padding: 4px 8px; font-size: 12px; margin-bottom: 6px;
         }
-
-        .btn-generate { background-color: var(--secondary-color); color: white; }
-        .btn-print { background-color: #059669; color: white; }
-
-        .output-box {
-            background-color: #f1f5f9;
-            padding: 12px;
-            border-left: 4px solid var(--secondary-color);
-            border-radius: 4px;
-            margin-bottom: 20px;
-            font-weight: 500;
-            font-size: 0.9rem;
-            line-height: 1.5;
+        .btn-add, .btn-print, .btn-del {
+            padding: 6px 12px; font-size: 12px; font-weight: 600; border: none; border-radius: 5px;
+            cursor: pointer; color: #fff;
         }
+        .btn-add { background: #1e3a8a; }
+        .btn-print { background: #059669; }
+        .btn-del { background: #dc2626; }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.82rem;
-            margin-top: 10px;
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        #pfTable2025 th { background: #1e293b; color: #fff; padding: 5px 4px; font-weight: 600; text-align: center; font-size: 11.5px; }
+        #pfTable2025 td { padding: 3px 4px; border: 1px solid var(--border-color); vertical-align: middle; text-align: center; }
+        #pfTable2025 tr:nth-child(even) { background: #f8fafc; }
+        #pfTable2025 input { padding: 2px 4px; }
+
+        /* ===== Modal (bulk) ===== */
+        .modal {
+            position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 50;
+            display: none; align-items: center; justify-content: center;
         }
+        .modal.show { display: flex; }
+        .modal-box { background: #fff; border-radius: 8px; padding: 14px 16px; width: min(560px, 94vw); max-height: 88vh; display: flex; flex-direction: column; }
+        .modal-box h3 { margin: 0 0 8px; color: var(--secondary-color); font-size: 15px; }
+        .bulk-top { display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+        .bulk-list { overflow-y: auto; border: 1px solid var(--border-color); border-radius: 5px; padding: 4px 8px; flex: 1; min-height: 120px; }
+        .bulk-list label { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 12px; cursor: pointer; }
+        .modal-act { display: flex; gap: 8px; margin-top: 10px; }
+        .modal-note { font-size: 11px; color: #64748b; margin-top: 6px; }
 
-        th {
-            background-color: #1e293b;
-            color: white;
-            padding: 8px 6px;
-            font-weight: 600;
-            text-align: center;
+        @media (max-width: 760px) { .side { width: 54px; flex-basis: 54px; } .ib { width: 46px; } .topbar h1 { white-space: normal; } }
+
+        /* ===== PF Ledger (standard school register format) — hidden on screen, used only for printing ===== */
+        #ledgerPrint { display: none; }
+        .lp {
+            width: 100%; height: 196mm; display: flex; flex-direction: column;
+            font-family: Arial, Helvetica, sans-serif; color: #000; background: #fff;
+            page-break-after: always; break-after: page; overflow: hidden;
         }
+        .lp:last-child { page-break-after: auto; break-after: auto; }
+        .lp-t1, .lp-t2 { text-align: center; font-weight: 700; font-size: 13.5pt; line-height: 1.25; }
+        .lp-t2 { text-transform: uppercase; }
+        .lp-yr { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin: 1.5mm 0 1.5mm; }
+        .lp-yr .fy { color: #d00000; font-weight: 800; font-size: 16pt; text-align: center; padding: 0 12mm; }
+        .lp-yr .roi { text-align: right; font-size: 11pt; padding-right: 4mm; }
+        .lt { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9.5pt; }
+        .lt th, .lt td { border: 0.3mm solid #000; padding: 0 1.2mm; height: 7mm; text-align: right; background: #fff; color: #000; }
+        .lt th { text-align: center; font-weight: 400; font-size: 8.8pt; line-height: 1.15; height: 11mm; }
+        .lt th.sm { font-size: 7.2pt; }
+        .lt td.l { text-align: left; }
+        .lt td.c { text-align: center; }
+        .lt td.sm { text-align: center; font-size: 7.8pt; }
+        .lt tr.tot td { font-weight: 700; }
+        .lt tr.rnd td { font-weight: 700; }
+        .lt tr.rnd td.lab { text-align: right; font-weight: 400; border-left-color: #fff; border-bottom-color: #fff; }
+        .lp-sum { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 4mm; }
+        .lp-sum table { border-collapse: separate; border-spacing: 0 1.4mm; width: auto; }
+        .lp-sum td.lab { font-size: 10pt; padding: 0 3mm 0 0; text-align: left; white-space: nowrap; }
+        .lp-sum td.val { font-size: 11.5pt; font-weight: 700; text-align: center; border: 0.4mm solid #000; width: 30mm; height: 7mm; }
+        .lp-sum .sl { width: 38%; }
+        .lp-sum .sl table { width: 100%; }
+        .lp-sum .sr { width: 50%; }
+        .lp-sum .sr table { width: 100%; }
+        .lp-sum .sr td.lab { text-align: right; }
+        .lp-sign { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; font-size: 10.5pt; padding: 0 2mm 1mm; }
+        .lp-sign .sg { width: 105mm; }
+        .lp-sign .sg.r { text-align: right; }
+        .lp-sign .sp { height: 12mm; }
+        .lp-sign .ln { border-top: 0.3mm solid #000; padding-top: 0.8mm; font-size: 9pt; }
+        .lp-sign .nm { font-weight: 700; text-transform: uppercase; margin-top: 0.5mm; }
+        .lp-sign .ds { font-size: 9.5pt; text-transform: uppercase; }
 
-        td {
-            padding: 6px;
-            border: 1px solid var(--border-color);
-            vertical-align: middle;
-            text-align: center;
-        }
-
-        tr:nth-child(even) { background-color: #f8fafc; }
-    
+        @page { size: A4 landscape; margin: 5mm 6mm 5mm 10mm; }
         @media print {
-            @page { size: A4 landscape; margin: 8mm; }
-            body { background:#fff !important; padding:0 !important; margin:0 !important; }
-            body * { visibility:hidden !important; }
-            #pfPrintArea, #pfPrintArea * { visibility:visible !important; }
-            #pfPrintArea {
-                position:absolute !important;
-                left:0 !important; top:0 !important;
-                width:100% !important;
-                margin:0 !important; padding:0 !important;
-            }
-            #pfPrintArea > h3 {
-                border-top:0 !important;
-                padding-top:0 !important;
-                margin:0 0 5mm 0 !important;
-                font-size:14pt !important;
-            }
-            #pfPrintArea .panel {
-                border:0 !important;
-                padding:0 !important;
-                margin:0 !important;
-                background:#fff !important;
-            }
-            #pfPrintArea .grid-inputs,
-            #pfPrintArea .btn-row,
-            #pfPrintArea button,
-            #pfPrintArea input[type="file"],
-            #pfPrintArea #pfSaveStatus {
-                display:none !important;
-            }
-            #pfPrintArea table {
-                width:100% !important;
-                font-size:8.5pt !important;
-                margin-top:2mm !important;
-                page-break-inside:auto;
-            }
-            #pfPrintArea th, #pfPrintArea td {
-                padding:3px 4px !important;
-                border:1px solid #444 !important;
-            }
-            #pfPrintArea tr { page-break-inside:avoid; }
-            #pfPrintArea .output-box {
-                border:1px solid #777 !important;
-                background:#fff !important;
-                padding:4px !important;
-                margin:0 0 3mm 0 !important;
-                font-size:8.5pt !important;
-            }
-            #pfPrintArea input {
-                border:0 !important;
-                background:transparent !important;
-                padding:0 !important;
-                font-size:8.5pt !important;
-                width:auto !important;
-            }
-        }
-        .pf-staff-header{margin-top:10px;margin-bottom:12px;}
-        .staff-info-table{width:100%;border-collapse:collapse;font-size:.9rem;background:#fff;}
-        .staff-info-table th,.staff-info-table td{border:1px solid #334155;padding:8px;text-align:center;}
-        .staff-info-table th{background:#1e293b;color:#fff;font-weight:700;}
-        .staff-info-table td{font-weight:700;background:#f8fafc;}
-        @media print{
-            @page{size:A4 landscape;margin:8mm;}
-            body{background:#fff!important;padding:0!important;margin:0!important;}
-            body *{visibility:hidden;}
-            #pfStaffHeader,#pfStaffHeader *,#pfTable2025,#pfTable2025 *{visibility:visible;}
-            #pfStaffHeader,#pfTable2025{position:relative;width:100%;}
-            #pfStaffHeader{margin:0 0 5mm 0;}
-            #pfTable2025{font-size:9px!important;margin-top:0;}
-            #pfTable2025 th,#pfTable2025 td{padding:3px!important;}
-            #pfTable2025 input{border:none;background:transparent;font-size:9px;text-align:center;}
-            #pfTable2025 th{background:#1e293b!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-            .staff-info-table{font-size:10px;}
-            .staff-info-table th,.staff-info-table td{padding:4px;}
+            html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+            body > *:not(#ledgerPrint) { display: none !important; }
+            #ledgerPrint { display: block !important; }
+            * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
 </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Unified ROPA Pay Fixation & PF Management Dashboard</h2>
+<div class="app">
 
-    <div class="auth-bar" id="authBar">
-        <span id="authStatus" class="auth-status signed-out">Checking sign-in status…</span>
-        <input type="email" id="authEmail" placeholder="Admin email" style="display:none;">
-        <input type="password" id="authPassword" placeholder="Password" style="display:none;">
-        <button type="button" class="btn-tiny" id="authActionBtn" onclick="handleAuthAction()" style="display:none;">Sign In</button>
-        <button type="button" class="btn-tiny logout" id="authLogoutBtn" onclick="handleSignOut()" style="display:none;">Sign Out</button>
-        <span class="sync-status" id="syncStatus">Connecting to cloud database…</span>
-    </div>
+    <!-- ===== LEFT ICON BAR ===== -->
+    <aside class="side" id="sideBar">
+        <div class="side-logo">PF</div>
 
-    <h3>1. Staff & Service Details</h3>
-    <div class="grid-inputs">
-        <div class="form-group">
-            <label>Name of the School</label>
-            <input type="text" id="schoolName" value="TALDANGRA FULMATI HIGH SCHOOL [H.S.]">
-        </div>
-        <div class="form-group">
-            <label>Name of the Staff</label>
-            <input type="text" id="staffName" value="PRABIR KUMAR DANGAR ; H,M,">
-        </div>
-        <div class="form-group">
-            <label>Designation</label>
-            <input type="text" id="designation" value="Headmaster">
-        </div>
-        <div class="form-group">
-            <label>Date of Joining (1st Joining)</label>
-            <input type="date" id="doj" value="2008-09-24">
-        </div>
-        <div class="form-group">
-            <label>Date of Birth</label>
-            <input type="date" id="dob" value="">
-        </div>
-        <div class="form-group">
-            <label>Date of Retirement (DOR)</label>
-            <input type="date" id="dor" value="">
-        </div>
-        <div class="form-group">
-            <label>Termination / Closure Date (if any)</label>
-            <input type="date" id="termDate" value="">
-        </div>
-        <div class="form-group">
-            <label>Joining in this School</label>
-            <input type="date" id="schoolJoining" value="">
-        </div>
-        <div class="form-group">
-            <label>IOSMS ID</label>
-            <input type="text" id="iosmsId" readonly>
-        </div>
-        <div class="form-group">
-            <label>NGIPF A/C No.</label>
-            <input type="text" id="ngipfAc" readonly>
-        </div>
-    </div>
+        <button type="button" class="ib" id="fyTab2025" onclick="switchFY(2025)" title="Financial Year 2025–26"><span class="ic">📅</span><span class="cap">2025–26</span></button>
+        <button type="button" class="ib" id="fyTab2026" onclick="switchFY(2026)" title="Financial Year 2026–27"><span class="ic">📅</span><span class="cap">2026–27</span></button>
 
-    <!-- PROVIDENT FUND (PF) 2026-27 WINDOW -->
-    <section id="pfPrintArea">
-<h3 style="margin-top:30px;border-top:3px solid var(--secondary-color);padding-top:20px;">7. Provident Fund (PF) Calculation & Auto-Contribution <span id="fyTitleYear">(2026–27)</span></h3>
-    <div class="panel" style="background:#ecfdf5;border:2px solid #10b981;">
-        <div style="font-weight:800;font-size:1rem;color:#065f46;margin-bottom:8px;">PF A/C No. 8 — Financial Year <span id="fySub">2026–27</span> Setup & Management</div>
+        <div class="side-sep"></div>
+        <button type="button" class="ib ok" onclick="savePfRecord()" title="Save staff record"><span class="ic">💾</span><span class="cap">Save</span></button>
+        <button type="button" class="ib ok" onclick="printLedger()" title="Print PF Ledger of this employee — standard format, 1 page A4 landscape"><span class="ic">🖨</span><span class="cap">Print Ledger</span></button>
+        <button type="button" class="ib ok" onclick="openBulk()" title="Bulk generate PF Ledgers for the whole financial year"><span class="ic">📚</span><span class="cap">Bulk FY</span></button>
 
-        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
-            <strong style="color:#065f46;">Financial Year:</strong>
-            <button type="button" id="fyTab2025" class="btn-add" onclick="switchFY(2025)">2025–26</button>
-            <button type="button" id="fyTab2026" class="btn-add" onclick="switchFY(2026)">2026–27</button>
-            <span id="fyLinkNote" style="font-size:.8rem;font-weight:700;color:#7c2d12;"></span>
-        </div>
-        <div id="fySideBySide" class="no-print" style="margin-bottom:12px;overflow-x:auto;"></div>
-        
-        <!-- Save/Load & Employee Controls -->
-        <div class="grid-inputs" style="background:#fff;padding:12px;border-radius:6px;border:1px solid #cbd5e1;margin-bottom:15px;">
-            <div class="form-group">
-                <label>Select Staff Member</label>
-                <select id="pfEmpSelect" onchange="onPfEmployeeSelect()">
-                    <!-- Populated via JS -->
-                </select>
-            </div>
-            <div class="form-group" style="display:flex;align-items:end;gap:6px;flex-wrap:wrap;">
-                <button type="button" class="btn-print" onclick="savePfRecord()">💾 Save Staff Record</button>
-                <button type="button" class="btn-print" style="background:#0f766e;" onclick="printPfStatement()">🖨 Print PF Statement (A4 Landscape)</button>
-                <button type="button" class="btn-add" onclick="addNewPfEmployee()">＋ Add New Emp</button>
-                <button type="button" class="btn-add" style="background:#be123c;" onclick="fillFinalSettlement()">💰 Final Settlement (full balance)</button>
-                <button type="button" class="btn-add" style="background:#b45309;" id="relinkBtn" onclick="rederiveObFromPrev()">↻ Re-link OB to 2025–26 CB</button>
-                <button type="button" class="btn-del" onclick="deletePfRecord()">🗑 Delete</button>
-            </div>
-            <div class="form-group" style="display:flex;align-items:end;gap:6px;flex-wrap:wrap;">
-                <button type="button" class="btn-add" style="background:#7c3aed;" onclick="exportAllPfJson()">⇩ Export All JSON</button>
-                <button type="button" class="btn-add" style="background:#475569;" onclick="document.getElementById('pfJsonImport').click()">⇧ Import JSON</button>
-                <button type="button" class="btn-print" onclick="printPFStatement()">🖨 Print PF Statement</button>
-                <input type="file" id="pfJsonImport" accept="application/json,.json" style="display:none;" onchange="importAllPfJson(event)">
-            </div>
-        </div>
-        <div id="gpfFetchPanel" class="grid-inputs" style="background:#eff6ff;padding:12px;border-radius:6px;border:1px solid #93c5fd;margin-bottom:15px;">
-            <div class="form-group">
-                <label>PF (GPF) deduction month — from Salary Portal</label>
-                <select id="gpfFetchMonth"></select>
-            </div>
-            <div class="form-group">
-                <label>Put into column</label>
-                <select id="gpfFetchTarget">
-                    <option value="after">Deposited after 15th</option>
-                    <option value="within">Deposited within 15th</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Table row for that salary</label>
-                <select id="gpfFetchOffset">
-                    <option value="0">Same month row</option>
-                    <option value="1">Next month row (salary paid next month)</option>
-                </select>
-            </div>
-            <div class="form-group" style="display:flex;align-items:end;gap:6px;flex-wrap:wrap;">
-                <button type="button" class="btn-add" style="background:#0369a1;" onclick="fetchGpfFromSalary('emp-month')">⬇ This Emp · This Month</button>
-                <button type="button" class="btn-add" style="background:#0369a1;" onclick="fetchGpfFromSalary('emp-all')">⬇ This Emp · All Months</button>
-                <button type="button" class="btn-add" style="background:#1e3a8a;" onclick="fetchGpfFromSalary('all-month')">⬇ All Emp · This Month</button>
-            </div>
-            <div id="gpfFetchResult" style="grid-column:1/-1;font-size:.8rem;font-weight:700;color:#075985;"></div>
-        </div>
-        <div id="pfSaveStatus" style="font-size:.8rem;font-weight:700;color:#065f46;margin-bottom:10px;"></div>
+        <div class="side-sep"></div>
+        <button type="button" class="ib" onclick="addNewPfEmployee()" title="Add new employee"><span class="ic">➕</span><span class="cap">Add Emp</span></button>
+        <button type="button" class="ib" onclick="fillFinalSettlement()" title="Final settlement (withdraw full balance)"><span class="ic">💰</span><span class="cap">Final Settle</span></button>
+        <button type="button" class="ib" id="relinkBtn" onclick="rederiveObFromPrev()" title="Re-link OB to previous year's closing balance"><span class="ic">🔗</span><span class="cap">Re-link OB</span></button>
+        <button type="button" class="ib" onclick="toggleGpf()" title="Fetch GPF deduction from Salary Portal"><span class="ic">⬇️</span><span class="cap">Fetch GPF</span></button>
+        <button type="button" class="ib danger" onclick="deletePfRecord()" title="Delete this employee record"><span class="ic">🗑</span><span class="cap">Delete</span></button>
 
-        <div class="grid-inputs">
-            <div class="form-group">
-                <label id="fyObLabel">Opening Balance (OB) (₹)</label>
-                <input type="number" id="pfOb2025" value="0" step="1" oninput="onObInput()">
-            </div>
-            <div class="form-group">
-                <label>Default Monthly Deposit after 15th (₹)</label>
-                <input type="number" id="pfDefaultMonthlyDep" value="30000" step="1" oninput="applyDefaultMonthlyToAll()">
-            </div>
-            <div class="form-group">
-                <label>Default Rate of Interest (% p.a.)</label>
-                <input type="number" id="pfRoi" value="7.1" step="0.01" oninput="applyDefaultRoiToAll()">
+        <div class="side-sep"></div>
+        <button type="button" class="ib" onclick="exportAllPfJson()" title="Export all records (JSON)"><span class="ic">📤</span><span class="cap">Export</span></button>
+        <button type="button" class="ib" onclick="document.getElementById('pfJsonImport').click()" title="Import records (JSON)"><span class="ic">📥</span><span class="cap">Import</span></button>
+        <input type="file" id="pfJsonImport" accept="application/json,.json" style="display:none;" onchange="importAllPfJson(event)">
+    </aside>
+
+    <!-- ===== MAIN (compact) ===== -->
+    <main class="main">
+
+        <div class="topbar">
+            <h1>Unified ROPA &amp; PF Management Dashboard</h1>
+            <div class="auth-bar" id="authBar">
+                <span id="authStatus" class="auth-status signed-out">Checking sign-in status…</span>
+                <input type="email" id="authEmail" placeholder="Admin email" style="display:none;">
+                <input type="password" id="authPassword" placeholder="Password" style="display:none;">
+                <button type="button" class="btn-tiny" id="authActionBtn" onclick="handleAuthAction()" style="display:none;">Sign In</button>
+                <button type="button" class="btn-tiny logout" id="authLogoutBtn" onclick="handleSignOut()" style="display:none;">Sign Out</button>
+                <span class="sync-status" id="syncStatus">Connecting to cloud database…</span>
             </div>
         </div>
 
-        <div id="pfStaffHeader" class="pf-staff-header">
-            <table class="staff-info-table">
-                <tr>
-                    <th>Name of Staff</th>
-                    <th>Designation</th>
-                    <th>DOB</th>
-                    <th>DOR</th>
-                    <th>1st Joining</th>
-                    <th>Joining in School</th>
-                    <th>IOSMS ID</th>
-                    <th>NGIPF A/C No.</th>
-                    <th id="fyObTh">Opening Balance (2026–27)</th>
-                </tr>
-                <tr>
-                    <td id="printStaffName">—</td>
-                    <td id="printDesignation">—</td>
-                    <td id="printDOB">—</td>
-                    <td id="printDOR">—</td>
-                    <td id="printDOJ">—</td>
-                    <td id="printSchoolJoining">—</td>
-                    <td id="printIOSMS">—</td>
-                    <td id="printNGIPF">—</td>
-                    <td id="printOB">₹ 0</td>
-                </tr>
-            </table>
+        <div class="card toolrow">
+            <div class="fg" style="flex:1;min-width:260px;">
+                <label>Staff member</label>
+                <select id="pfEmpSelect" onchange="onPfEmployeeSelect()"></select>
+            </div>
+            <div class="fyChip">Financial Year: <span id="fySub">2026–27</span><span id="fyTitleYear" style="display:none;"></span></div>
+            <div id="pfSaveStatus"></div>
+            <div id="fyLinkNote"></div>
         </div>
-        
-        <div class="table-responsive" style="margin-top:10px;">
+
+        <details class="card" open>
+            <summary>Staff &amp; Service Details</summary>
+            <div class="cgrid">
+                <div class="fg"><label>Name of the School</label><input type="text" id="schoolName" value="TALDANGRA FULMATI HIGH SCHOOL [H.S.]"></div>
+                <div class="fg"><label>Name of the Staff</label><input type="text" id="staffName" value="PRABIR KUMAR DANGAR ; H,M,"></div>
+                <div class="fg"><label>Designation</label><input type="text" id="designation" value="Headmaster"></div>
+                <div class="fg"><label>1st Joining</label><input type="date" id="doj" value="2008-09-24"></div>
+                <div class="fg"><label>Date of Birth</label><input type="date" id="dob" value=""></div>
+                <div class="fg"><label>Date of Retirement (DOR)</label><input type="date" id="dor" value=""></div>
+                <div class="fg"><label>Termination / Closure Date</label><input type="date" id="termDate" value=""></div>
+                <div class="fg"><label>Joining in this School</label><input type="date" id="schoolJoining" value=""></div>
+                <div class="fg"><label>IOSMS ID</label><input type="text" id="iosmsId" readonly></div>
+                <div class="fg"><label>NGIPF A/C No.</label><input type="text" id="ngipfAc" readonly></div>
+                <div class="fg"><label>Headmaster (ledger signatory)</label><input type="text" id="hmName" value="PRABIR KUMAR DANGAR"></div>
+            </div>
+        </details>
+
+        <details class="card" id="gpfDetails">
+            <summary>Fetch GPF deduction from Salary Portal</summary>
+            <div id="gpfFetchPanel" class="cgrid">
+                <div class="fg"><label>PF (GPF) deduction month</label><select id="gpfFetchMonth"></select></div>
+                <div class="fg">
+                    <label>Put into column</label>
+                    <select id="gpfFetchTarget">
+                        <option value="after">Deposited after 15th</option>
+                        <option value="within">Deposited within 15th</option>
+                    </select>
+                </div>
+                <div class="fg">
+                    <label>Table row for that salary</label>
+                    <select id="gpfFetchOffset">
+                        <option value="0">Same month row</option>
+                        <option value="1">Next month row (salary paid next month)</option>
+                    </select>
+                </div>
+                <div class="fg" style="flex-direction:row;align-items:flex-end;gap:6px;flex-wrap:wrap;">
+                    <button type="button" class="btn-add" style="background:#0369a1;" onclick="fetchGpfFromSalary('emp-month')">⬇ This Emp · This Month</button>
+                    <button type="button" class="btn-add" style="background:#0369a1;" onclick="fetchGpfFromSalary('emp-all')">⬇ This Emp · All Months</button>
+                    <button type="button" class="btn-add" style="background:#1e3a8a;" onclick="fetchGpfFromSalary('all-month')">⬇ All Emp · This Month</button>
+                </div>
+                <div id="gpfFetchResult" style="grid-column:1/-1;font-size:.8rem;font-weight:700;color:#075985;"></div>
+            </div>
+        </details>
+
+        <div class="card">
+            <div class="cgrid">
+                <div class="fg"><label id="fyObLabel">Opening Balance (OB) (₹)</label><input type="number" id="pfOb2025" value="0" step="1" oninput="onObInput()"></div>
+                <div class="fg"><label>Default Monthly Deposit after 15th (₹)</label><input type="number" id="pfDefaultMonthlyDep" value="30000" step="1" oninput="applyDefaultMonthlyToAll()"></div>
+                <div class="fg"><label>Default Rate of Interest (% p.a.)</label><input type="number" id="pfRoi" value="7.1" step="0.01" oninput="applyDefaultRoiToAll()"></div>
+            </div>
+        </div>
+
+        <!-- Interest: actual vs rounded (NGIPF portal can differ by Re 1) -->
+        <div class="intbar">
+            <span><strong>Interest for the year</strong></span>
+            <span>Actual: <b id="intActual">₹ 0.00</b></span>
+            <span>Rounded off: <b id="intRounded">₹ 0</b></span>
+            <span>Edit (as per NGIPF portal): <input type="number" id="pfIntOverride" step="1" placeholder="auto" oninput="onIntOverrideInput()"></span>
+            <button type="button" class="btn-tiny" onclick="resetIntOverride()" title="Clear the edited value and use the rounded actual interest">↺ Reset</button>
+            <span>Credited in ledger: <b id="intUsed" style="color:#047857;">₹ 0</b></span>
+        </div>
+
+        <div id="fySideBySide" style="margin-bottom:8px;overflow-x:auto;"></div>
+
+        <div id="pfStaffHeader" class="strip"></div>
+
+        <div class="card" style="padding:6px;">
             <table id="pfTable2025">
                 <thead>
                     <tr>
@@ -416,13 +312,30 @@
                         <th>Running Monthly Balance<br>(OB + All Dep - WD)</th>
                     </tr>
                 </thead>
-                <tbody id="pfTableBody2025">
-                    <!-- Populated via JS -->
-                </tbody>
+                <tbody id="pfTableBody2025"></tbody>
             </table>
         </div>
+    </main>
+</div>
+
+<!-- Printable ledger(s): filled only at print time -->
+<div id="ledgerPrint"></div>
+
+<!-- Bulk ledger generator -->
+<div class="modal" id="bulkModal">
+    <div class="modal-box">
+        <h3>📚 Bulk PF Ledger — FY <span id="bulkFy"></span></h3>
+        <div class="bulk-top">
+            <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="bulkAll" checked onchange="bulkToggle(this.checked)"> Select all</label>
+            <span id="bulkCount"></span>
+        </div>
+        <div class="bulk-list" id="bulkList"></div>
+        <div class="modal-act">
+            <button type="button" class="btn-print" onclick="bulkPrint()">🖨 Generate &amp; Print</button>
+            <button type="button" class="btn-add" style="background:#475569;" onclick="closeBulk()">Close</button>
+        </div>
+        <div class="modal-note">One employee = one A4 landscape page, in staff-list order. Choose “Save as PDF” in the print dialog to keep a single PDF for the whole year.</div>
     </div>
-</section>
 </div>
 
 <!-- Firebase SDKs (compat build, single-file friendly) -->
@@ -547,6 +460,7 @@ let monthlyDepWithinCache = Array(12).fill(0);
 let monthlyDepAfterCache = Array(12).fill(30000);
 let monthlyWdCache = Array(12).fill(0);
 let monthlyRoiCache = Array(12).fill(7.1);
+let intOverrideCache = null;
 
 function getSavedRecords(fy = currentFY) {
     try {
@@ -634,6 +548,7 @@ function simulateFY(rec, fyStart) {
     const wdArr  = arr(rec.monthlyWd, 0);
     const roiArr = arr(rec.monthlyRoi, rec.roi !== undefined ? rec.roi : 7.1);
     const ob = Number(rec.ob) || 0;
+    const ovr = (rec.interestOverride === null || rec.interestOverride === undefined || rec.interestOverride === '' || !isFinite(Number(rec.interestOverride))) ? null : Math.round(Number(rec.interestOverride));
     const mStart = d => new Date(d.getFullYear(), d.getMonth(), 1);
     const dorD  = rec.dor ? new Date(rec.dor + 'T00:00:00') : null;
     const termD = rec.termDate ? new Date(rec.termDate + 'T00:00:00') : null;
@@ -643,7 +558,7 @@ function simulateFY(rec, fyStart) {
     let endStart = null;                                   // month in which the account closes
     [dorD, termD].forEach(d => { if (d) { const m = mStart(d); if (!endStart || m < endStart) endStart = m; } });
 
-    let bal = ob, accrued = 0, dep = 0, wdT = 0, credited = 0, closeIdx = -1, minClose = Infinity;
+    let bal = ob, accrued = 0, actualTot = 0, dep = 0, wdT = 0, credited = 0, closeIdx = -1, minClose = Infinity;
     const months = [];
     for (let i = 0; i < 12; i++) {
         const ms = new Date(i < 9 ? fyStart : fyStart + 1, i < 9 ? i + 3 : i - 9, 1);
@@ -656,11 +571,11 @@ function simulateFY(rec, fyStart) {
         let lowest = op + w - wd; if (lowest < 0) lowest = 0;
         let roi = Number(roiArr[i]); if (!isFinite(roi) || roi < 0) roi = 7.1;
         const interest = intStopped ? 0 : lowest * ((roi / 100) / 12);
-        accrued += interest;
+        accrued += interest; actualTot += interest;
         bal = op + w + a - wd;
         let credit = 0;
         if (endStart && ms.getTime() === endStart.getTime()) {   // closure month: credit accrued interest now
-            credit = Math.round(accrued); credited = credit; closeIdx = i; bal += credit; accrued = 0;
+            credit = ovr !== null ? ovr : Math.round(accrued); credited = credit; closeIdx = i; bal += credit; accrued = 0;
         }
         dep += w + a; wdT += wd;
         if (bal < minClose) minClose = bal;
@@ -668,8 +583,9 @@ function simulateFY(rec, fyStart) {
     }
     let interestTotal;
     if (closeIdx >= 0) interestTotal = credited;            // already credited at closure
-    else { interestTotal = Math.round(accrued); bal += interestTotal; }
+    else { interestTotal = ovr !== null ? ovr : Math.round(accrued); bal += interestTotal; }
     return { months, ob, dep, wd: wdT, interest: interestTotal, cb: Math.round(bal), closeIdx, closedInFY: closeIdx >= 0,
+             actual: actualTot, rounded: Math.round(actualTot), overridden: ovr !== null,
              hasNegative: minClose < -0.5 };
 }
 
@@ -689,7 +605,7 @@ function buildFromPrevYear(prev) {
         const cb = computeClosingBalance(r, 2025);
         const roi = r.roi !== undefined ? r.roi : 7.1;
         const dep = r.defaultDepAfter !== undefined ? r.defaultDepAfter : 0;
-        return { ...r, ob: cb, prevCB2526: cb, defaultDepAfter: dep, roi,
+        return { ...r, ob: cb, prevCB2526: cb, defaultDepAfter: dep, roi, interestOverride: null,
                  monthlyDepWithin: Array(12).fill(0), monthlyDepAfter: Array(12).fill(dep),
                  monthlyWd: Array(12).fill(0), monthlyRoi: Array(12).fill(roi) };
     });
@@ -771,11 +687,11 @@ function applyFyLabels() {
     set('fySub', L);
     set('fyObTh', `Opening Balance (${L})`);
     set('fyObLabel', currentFY === 2026
-        ? 'Opening Balance (OB) 2026–27 (₹) [auto = Closing Balance of 2025–26; edit to override]'
-        : 'Opening Balance (OB) 2025–26 (₹) [from 2024–25 Actual CB]');
+        ? 'OB 2026–27 (₹) · auto = CB of 2025–26 (editable)'
+        : 'OB 2025–26 (₹) · from 2024–25 actual CB');
     [2025, 2026].forEach(y => {
         const b = document.getElementById('fyTab' + y);
-        if (b) { b.style.background = (y === currentFY) ? '#065f46' : '#94a3b8'; b.style.outline = (y === currentFY) ? '3px solid #10b981' : 'none'; }
+        if (b) b.classList.toggle('active', y === currentFY);
     });
     const rb = document.getElementById('relinkBtn'); if (rb) rb.style.display = currentFY === 2026 ? '' : 'none';
     if (typeof initGpfMonthSelect === 'function') initGpfMonthSelect();
@@ -848,6 +764,8 @@ function onPfEmployeeSelect() {
         const savedRoi = Array.isArray(emp.monthlyRoi) && emp.monthlyRoi.length === 12 ? emp.monthlyRoi : Array(12).fill(emp.roi !== undefined ? emp.roi : 7.1);
         monthlyRoiCache = [...savedRoi];
         document.getElementById('pfRoi').value = emp.roi !== undefined ? emp.roi : monthlyRoiCache[0];
+        intOverrideCache = (emp.interestOverride === undefined || emp.interestOverride === null || emp.interestOverride === '') ? null : Number(emp.interestOverride);
+        document.getElementById('pfIntOverride').value = intOverrideCache === null ? '' : intOverrideCache;
         calculatePF2025_26();
     }
 }
@@ -874,33 +792,14 @@ function applyDefaultRoiToAll() {
 }
 
 function updateStaffHeader() {
-    const name = document.getElementById('staffName').value.trim();
-    const designation = document.getElementById('designation').value.trim();
-    const dob = document.getElementById('dob').value;
-    const dor = document.getElementById('dor').value;
-    const doj = document.getElementById('doj').value; // 1st joining
-    const sj = document.getElementById('schoolJoining').value; // joining in this school
-    const ob = Number(document.getElementById('pfOb2025').value) || 0;
-    const fmt = v => v ? new Date(v + 'T00:00:00').toLocaleDateString('en-GB') : '—';
-
-    document.getElementById('printStaffName').textContent = name || '—';
-    document.getElementById('printDesignation').textContent = designation || '—';
-    document.getElementById('printDOB').textContent = fmt(dob);
-    document.getElementById('printDOR').textContent = fmt(dor);
-    document.getElementById('printDOJ').textContent = fmt(doj);
-    document.getElementById('printSchoolJoining').textContent = fmt(sj);
-
+    const g = id => ((document.getElementById(id) || {}).value || '');
     const idx = window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value);
     const emp = activeStaffRecords[idx] || {};
-    document.getElementById('printIOSMS').textContent = emp.iosms || document.getElementById('iosmsId').value || '—';
-    document.getElementById('printNGIPF').textContent = emp.ngipf || document.getElementById('ngipfAc').value || '—';
-    document.getElementById('printOB').textContent = '₹ ' + Math.round(ob).toLocaleString('en-IN');
-}
-
-function printPFStatement() {
-    persistCurrentPfRecord(false);
-    updateStaffHeader();
-    window.print();
+    const ob = Math.round(Number(g('pfOb2025')) || 0);
+    const e = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+    const fmt = v => v ? new Date(v + 'T00:00:00').toLocaleDateString('en-GB') : '—';
+    const strip = document.getElementById('pfStaffHeader');
+    if (strip) strip.innerHTML = `<b>${e(g('staffName').trim() || '—')}</b> · ${e(g('designation').trim() || '—')} · DOB ${fmt(g('dob'))} · DOR ${fmt(g('dor'))} · IOSMS ${e(emp.iosms || g('iosmsId') || '—')} · NGIPF A/C ${e(emp.ngipf || g('ngipfAc') || '—')} · OB ${FY[currentFY].label}: <b>₹ ${ob.toLocaleString('en-IN')}</b>`;
 }
 
 function applyDefaultMonthlyToAll() {
@@ -932,7 +831,8 @@ function liveRecForSim() {
         defaultDepAfter: parseFloat(document.getElementById('pfDefaultMonthlyDep').value) || 0,
         roi: parseFloat(document.getElementById('pfRoi').value) || 7.1,
         monthlyDepWithin: monthlyDepWithinCache, monthlyDepAfter: monthlyDepAfterCache,
-        monthlyWd: monthlyWdCache, monthlyRoi: monthlyRoiCache
+        monthlyWd: monthlyWdCache, monthlyRoi: monthlyRoiCache,
+        interestOverride: intOverrideCache
     };
 }
 
@@ -943,6 +843,7 @@ function renderPfTableInputs() {
     if (!monthlyRoiCache || monthlyRoiCache.length !== 12) monthlyRoiCache = Array(12).fill(defaultRoi);
 
     const sim = simulateFY(liveRecForSim(), y0);
+    renderIntBar(sim);
     const fmt = v => Math.round(v).toLocaleString('en-IN');
     let tbodyHtml = "";
 
@@ -1035,7 +936,8 @@ function persistCurrentPfRecord(showStatus = false) {
         monthlyDepWithin: [...monthlyDepWithinCache],
         monthlyDepAfter: [...monthlyDepAfterCache],
         monthlyWd: [...monthlyWdCache],
-        monthlyRoi: [...monthlyRoiCache]
+        monthlyRoi: [...monthlyRoiCache],
+        interestOverride: intOverrideCache
     };
     saveRecordsToStorage(activeStaffRecords);
     renderFySummary();
@@ -1132,18 +1034,6 @@ function importAllPfJson(event) {
     reader.readAsText(file);
 }
 
-
-function printPfStatement() {
-    const staff = document.getElementById('staffName').value.trim();
-    const school = document.getElementById('schoolName').value.trim();
-    const oldTitle = document.title;
-    document.title = `${school} - PF Statement - ${staff}`;
-    calculatePF2025_26();
-    setTimeout(() => {
-        window.print();
-        document.title = oldTitle;
-    }, 100);
-}
 
 window.addEventListener('DOMContentLoaded', () => {
     applyFyLabels();
@@ -1337,6 +1227,163 @@ async function fetchGpfFromSalary(mode){
         out.textContent = '⚠ Fetch failed: ' + (err.message || err);
     }
 }
+</script>
+<script>
+/* ===== Compact-dashboard helpers ===== */
+function toggleGpf() {
+    const d = document.getElementById('gpfDetails'); if (!d) return;
+    d.open = !d.open;
+    if (d.open) d.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* ===== Interest: actual vs rounded (editable, to match NGIPF portal) ===== */
+function renderIntBar(sim) {
+    const set = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
+    set('intActual', '₹ ' + sim.actual.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    set('intRounded', '₹ ' + sim.rounded.toLocaleString('en-IN'));
+    set('intUsed', '₹ ' + sim.interest.toLocaleString('en-IN') + (sim.overridden ? '  (edited)' : ''));
+}
+function onIntOverrideInput() {
+    const v = document.getElementById('pfIntOverride').value.trim();
+    const n = parseFloat(v);
+    intOverrideCache = (v === '' || !isFinite(n)) ? null : Math.round(n);
+    calculatePF2025_26();
+    persistCurrentPfRecord(false);
+}
+function resetIntOverride() {
+    document.getElementById('pfIntOverride').value = '';
+    onIntOverrideInput();
+}
+
+/* ===== Headmaster name for ledger signature (remembered on this device) ===== */
+const HM_KEY = 'TFHS_PF_HM_NAME';
+window.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('hmName'); if (!el) return;
+    const saved = localStorage.getItem(HM_KEY);
+    if (saved) el.value = saved;
+    el.addEventListener('input', () => localStorage.setItem(HM_KEY, el.value));
+});
+
+/* ===== PF LEDGER — standard school register format (A4 landscape, 1 page per employee per FY) ===== */
+const MON_SHORT = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+const escH = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const inrFmt = v => Math.round(v).toLocaleString('en-IN');   // 34,19,502
+const plainFmt = v => String(Math.round(v));                  // 3379511
+
+function fullDesig(d) {
+    const s = String(d || '').trim().toUpperCase();
+    const m = { 'HM':'HEADMASTER', 'H,M,':'HEADMASTER', 'AHM':'ASSISTANT HEADMASTER', 'AT':'ASSISTANT TEACHER',
+                'A.T.':'ASSISTANT TEACHER', 'GROUP D':'GROUP-D STAFF', 'GR-D':'GROUP-D STAFF', 'GROUP-D':'GROUP-D STAFF' };
+    return m[s] || s;
+}
+
+function ledgerPageHTML(rec, fy) {
+    const y0 = FY[fy].start;
+    const sim = simulateFY(rec, y0);
+    const name = String(rec.name || '').replace(/\s*;.*$/, '').replace(/\s+/g, ' ').trim().toUpperCase();
+    const desig = fullDesig(rec.designation || deriveDesignation(rec.name));
+    const school = (document.getElementById('schoolName').value || '').trim().toUpperCase();
+    const hm = ((document.getElementById('hmName') || {}).value || 'PRABIR KUMAR DANGAR').trim().toUpperCase();
+    const ac = String(rec.ngipf || '').trim();
+    const fyTxt = `${y0}-${String(y0 + 1).slice(2)}`;
+    const roiTxt = [...new Set(sim.months.map(m => m.roi.toFixed(2)))].join(' / ') + '%';
+
+    let tw = 0, ta = 0, tdr = 0, rows = '';
+    sim.months.forEach((m, i) => {
+        const lab = `${MON_SHORT[i]}-${String(i < 9 ? y0 : y0 + 1).slice(2)}`;
+        tw += m.w; ta += m.a; tdr += m.wd;
+        rows += `<tr>
+            <td class="l">${lab}</td><td>${plainFmt(m.op)}</td><td class="sm">${lab}</td><td></td><td></td>
+            <td>${m.w ? inrFmt(m.w) : '-'}</td><td>${m.a ? inrFmt(m.a) : '-'}</td><td>${m.wd ? inrFmt(m.wd) : ''}</td><td></td>
+            <td>${plainFmt(m.lowest)}</td><td>${m.interest.toFixed(2)}</td><td>${plainFmt(m.close)}</td><td></td></tr>`;
+    });
+    rows += `<tr class="tot"><td class="l">Total</td><td></td><td></td><td></td><td></td>
+        <td>${tw ? inrFmt(tw) : '-'}</td><td>${ta ? inrFmt(ta) : '-'}</td><td>${tdr ? inrFmt(tdr) : '-'}</td><td></td><td></td>
+        <td>${sim.actual.toFixed(2)}</td><td></td><td></td></tr>
+        <tr class="rnd"><td class="lab" colspan="10">Rounded off</td><td>${plainFmt(sim.interest)}</td><td></td><td></td></tr>`;
+
+    const totalAmt = sim.ob + sim.dep + sim.interest;
+    return `<div class="lp">
+        <div class="lp-t1">PARTICULARS OF STATEMENT OF P.F. ( A/C NO.${escH(ac)} ) OF</div>
+        <div class="lp-t2">${escH(name)} ;${escH(desig)} ;${escH(school)}</div>
+        <div class="lp-yr"><span></span><span class="fy">${fyTxt}</span><span class="roi">Rate of Interest &nbsp;&nbsp; ${roiTxt}</span></div>
+        <table class="lt">
+            <colgroup><col style="width:5%"><col style="width:8.5%"><col style="width:6.5%"><col style="width:5.5%"><col style="width:5.5%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:9.5%"><col style="width:9%"><col style="width:9.5%"><col style="width:8.5%"><col style="width:9.5%"><col style="width:5.5%"></colgroup>
+            <thead><tr>
+                <th>Month</th><th>Opening<br>Balance</th><th class="sm">Months for<br>Which<br>Deposited</th><th class="sm">Challan<br>No</th><th class="sm">Date</th>
+                <th>Deposited<br>within<br>15th</th><th>Deposited<br>after<br>15th</th><th>With<br>drawal</th><th>Cheque<br>No &amp;<br>Date</th>
+                <th>Monthly<br>lowest<br>Balalance</th><th>Interest<br>Allowed</th><th>Closing<br>Balance</th><th class="sm">Remarks</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+        <div class="lp-sum">
+            <div class="sl"><table>
+                <tr><td class="lab">1.Opening Balance for the year &nbsp; Rs.</td><td class="val">${plainFmt(sim.ob)}</td></tr>
+                <tr><td class="lab">2.Total Deposit (inl.recovery of loans) Rs.</td><td class="val">${plainFmt(sim.dep)}</td></tr>
+                <tr><td class="lab">3.Interest allowed during the year Rs.</td><td class="val">${plainFmt(sim.interest)}</td></tr>
+            </table></div>
+            <div class="sr"><table>
+                <tr><td class="lab">4.Total: &nbsp;&nbsp;&nbsp; Rs.</td><td class="val">${plainFmt(totalAmt)}</td></tr>
+                <tr><td class="lab">5.Withdrawls during the year &nbsp; Rs.</td><td class="val">${plainFmt(sim.wd)}</td></tr>
+                <tr><td class="lab">6.Closing Balance on 31st March of the year &nbsp; Rs.</td><td class="val">${plainFmt(sim.cb)}</td></tr>
+            </table></div>
+        </div>
+        <div class="lp-sign">
+            <div class="sg"><div class="sp"></div><div class="ln">Signature of the Employee</div><div class="nm">${escH(name)}</div><div class="ds">${escH(desig)}</div></div>
+            <div class="sg r"><div class="sp"></div><div class="ln">Signature of the Headmaster</div><div class="nm">${escH(hm)}</div><div class="ds">HEADMASTER, ${escH(school)}</div></div>
+        </div>
+    </div>`;
+}
+
+function printPages(html, title) {
+    const host = document.getElementById('ledgerPrint');
+    host.innerHTML = html;
+    const oldTitle = document.title;
+    document.title = title;
+    const done = () => { host.innerHTML = ''; document.title = oldTitle; window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    setTimeout(() => window.print(), 80);
+}
+
+function printLedger() {
+    persistCurrentPfRecord(false);
+    const idx = window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value);
+    const rec = activeStaffRecords[idx];
+    if (!rec) { alert('Select a staff member first.'); return; }
+    const nm = String(rec.name || '').replace(/\s*;.*$/, '').trim();
+    printPages(ledgerPageHTML(rec, currentFY), `PF Ledger ${FY[currentFY].label} - ${nm}`);
+}
+
+/* ---- Bulk: one ledger page per selected employee for the selected financial year ---- */
+function openBulk() {
+    persistCurrentPfRecord(false);
+    document.getElementById('bulkFy').textContent = FY[currentFY].label;
+    document.getElementById('bulkList').innerHTML = activeStaffRecords.map((r, i) => {
+        const nm = String(r.name || '').replace(/\s*;.*$/, '').trim();
+        return `<label><input type="checkbox" class="bulkChk" data-i="${i}" checked onchange="bulkCount()"> ${i + 1}. ${escH(nm)} <span style="color:#64748b;">${escH(fullDesig(r.designation || deriveDesignation(r.name)))}</span></label>`;
+    }).join('');
+    document.getElementById('bulkAll').checked = true;
+    bulkCount();
+    document.getElementById('bulkModal').classList.add('show');
+}
+function closeBulk() { document.getElementById('bulkModal').classList.remove('show'); }
+function bulkToggle(on) { document.querySelectorAll('.bulkChk').forEach(c => c.checked = on); bulkCount(); }
+function bulkCount() {
+    const all = document.querySelectorAll('.bulkChk'), on = document.querySelectorAll('.bulkChk:checked');
+    document.getElementById('bulkCount').textContent = `${on.length} of ${all.length} selected`;
+    document.getElementById('bulkAll').checked = all.length > 0 && on.length === all.length;
+}
+function bulkPrint() {
+    const picks = [...document.querySelectorAll('.bulkChk:checked')].map(c => Number(c.dataset.i));
+    if (!picks.length) { alert('Select at least one employee.'); return; }
+    const html = picks.map(i => ledgerPageHTML(activeStaffRecords[i], currentFY)).join('');
+    closeBulk();
+    printPages(html, `PF Ledger ${FY[currentFY].label} - All Staff (${picks.length})`);
+}
+
+// Old button names kept so nothing else breaks
+function printPfStatement() { printLedger(); }
+function printPFStatement() { printLedger(); }
 </script>
 </body>
 </html>
