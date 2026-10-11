@@ -329,6 +329,13 @@
                     <option value="within">Deposited within 15th</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label>Table row for that salary</label>
+                <select id="gpfFetchOffset">
+                    <option value="0">Same month row</option>
+                    <option value="1">Next month row (salary paid next month)</option>
+                </select>
+            </div>
             <div class="form-group" style="display:flex;align-items:end;gap:6px;flex-wrap:wrap;">
                 <button type="button" class="btn-add" style="background:#0369a1;" onclick="fetchGpfFromSalary('emp-month')">⬇ This Emp · This Month</button>
                 <button type="button" class="btn-add" style="background:#0369a1;" onclick="fetchGpfFromSalary('emp-all')">⬇ This Emp · All Months</button>
@@ -1042,55 +1049,56 @@ async function fetchGpfFromSalary(mode){
         const snap = await salaryPortalRef.get();
         if (!snap.exists) { out.style.color='#b91c1c'; out.textContent='⚠ Salary Portal document not found.'; return; }
         const months = (snap.data() || {}).months || {};
-        const target = document.getElementById('gpfFetchTarget').value;   // 'after' | 'within'
-        const monthIdx = Number(document.getElementById('gpfFetchMonth').value);
-        const curIdx = window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value);
-
-        const setVal = (rec, i, v) => {
-            const key = target === 'within' ? 'monthlyDepWithin' : 'monthlyDepAfter';
-            if (!Array.isArray(rec[key]) || rec[key].length !== 12) rec[key] = Array(12).fill(0);
-            rec[key][i] = v;
+        const target = document.getElementById('gpfFetchTarget').value;
+        const offset = Number(document.getElementById('gpfFetchOffset').value) || 0;
+        const selIdx = Number(document.getElementById('gpfFetchMonth').value);   // salary month chosen
+        const rowOf = i => i + offset;                                          // PF table row for salary month i
+        const srcKey = r => {                                                   // salary month feeding PF row r
+            const i = r - offset;
+            if (i >= 0) return `${PF_FY_MONTHS[i][0]}-${PF_FY_MONTHS[i][1]}`;
+            return 'March-2025';
         };
+        const key = target === 'within' ? 'monthlyDepWithin' : 'monthlyDepAfter';
+        const setVal = (rec, row, v) => {
+            if (!Array.isArray(rec[key]) || rec[key].length !== 12) rec[key] = Array(12).fill(0);
+            rec[key][row] = v;
+        };
+        const curIdx = window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value);
+        persistCurrentPfRecord(false);   // flush what's on screen first
+        let filled = 0; const noData = [], noEmp = [], lines = [];
 
-        let filled = 0, missingMonths = [], missingEmp = [];
+        let rows = [];   // PF rows to fill
+        if (mode === 'emp-all') rows = PF_FY_MONTHS.map((_,r)=>r);
+        else { const r = rowOf(selIdx); if (r > 11) { out.style.color='#b45309'; out.textContent='⚠ That salary month falls in the next financial year row.'; return; } rows = [r]; }
 
-        if (mode === 'all-month') {
-            persistCurrentPfRecord(false);
-            const [m,y] = PF_FY_MONTHS[monthIdx];
-            const rows = months[`${m}-${y}`];
-            if (!rows) { out.style.color='#b91c1c'; out.textContent=`⚠ No salary data saved for ${m} ${y}.`; return; }
-            activeStaffRecords.forEach(rec => {
-                const r = _findSalaryRow(rows, rec);
-                if (r) { setVal(rec, monthIdx, Number(r.gpf)||0); filled++; } else missingEmp.push(_normName(rec.name));
+        const targets = mode === 'all-month' ? activeStaffRecords : [activeStaffRecords[curIdx]];
+        rows.forEach(r => {
+            const k = srcKey(r);
+            const data = months[k];
+            if (!data) { noData.push(k); return; }
+            targets.forEach(rec => {
+                if (!rec) return;
+                const row = _findSalaryRow(data, rec);
+                if (!row) { noEmp.push(_normName(rec.name)+' ('+k+')'); return; }
+                const v = Number(row.gpf) || 0;
+                setVal(rec, r, v); filled++;
+                if (mode !== 'all-month') lines.push(`${PF_FY_MONTHS[r][0].slice(0,3)} ${PF_FY_MONTHS[r][1]} ← ${k}: ₹${v.toLocaleString('en-IN')}`);
             });
-            saveRecordsToStorage(activeStaffRecords);
-            onPfEmployeeSelect();
-            out.textContent = `✓ ${m} ${y}: GPF filled for ${filled} staff.` + (missingEmp.length ? ` Not in salary roll: ${missingEmp.join(', ')}.` : '');
-            return;
-        }
-
-        // single employee (this month or all months)
-        persistCurrentPfRecord(false);
-        const rec = activeStaffRecords[curIdx];
-        if (!rec) { out.style.color='#b91c1c'; out.textContent='⚠ Select a staff member first.'; return; }
-        const idxs = mode === 'emp-all' ? PF_FY_MONTHS.map((_,i)=>i) : [monthIdx];
-        const lines = [];
-        idxs.forEach(i => {
-            const [m,y] = PF_FY_MONTHS[i];
-            const rows = months[`${m}-${y}`];
-            if (!rows) { missingMonths.push(`${m.slice(0,3)} ${y}`); return; }
-            const r = _findSalaryRow(rows, rec);
-            if (!r) { missingEmp.push(`${m.slice(0,3)} ${y}`); return; }
-            const v = Number(r.gpf)||0;
-            setVal(rec, i, v); filled++;
-            lines.push(`${m.slice(0,3)} ${y}: ₹${v.toLocaleString('en-IN')}`);
         });
+
         saveRecordsToStorage(activeStaffRecords);
-        onPfEmployeeSelect();
-        let msg = filled ? `✓ ${_normName(rec.name)} — ${lines.join(' | ')}` : `⚠ No GPF found for ${_normName(rec.name)}.`;
-        if (missingMonths.length) msg += ` | No salary data for: ${missingMonths.join(', ')}`;
-        if (missingEmp.length) msg += ` | Not in roll: ${missingEmp.join(', ')}`;
-        if (!filled) out.style.color='#b45309';
+        // Reload caches + inputs directly from the updated record (do NOT call onPfEmployeeSelect: it re-saves stale caches)
+        const rec = activeStaffRecords[curIdx];
+        if (rec) {
+            monthlyDepWithinCache = Array.isArray(rec.monthlyDepWithin) && rec.monthlyDepWithin.length===12 ? [...rec.monthlyDepWithin] : Array(12).fill(0);
+            monthlyDepAfterCache  = Array.isArray(rec.monthlyDepAfter)  && rec.monthlyDepAfter.length===12  ? [...rec.monthlyDepAfter]  : Array(12).fill(0);
+        }
+        calculatePF2025_26();
+
+        let msg = filled ? `✓ Filled ${filled} cell(s) in "${target === 'within' ? 'within 15th' : 'after 15th'}" column. ` + lines.join(' | ') : '⚠ Nothing filled. ';
+        if (noData.length) msg += ` No salary data saved for: ${[...new Set(noData)].join(', ')}.`;
+        if (noEmp.length) msg += ` Not in roll: ${noEmp.slice(0,8).join(', ')}${noEmp.length>8?'…':''}.`;
+        if (!filled) out.style.color = '#b45309';
         out.textContent = msg;
     } catch (err) {
         console.error(err);
