@@ -277,6 +277,10 @@
             <input type="date" id="dor" value="">
         </div>
         <div class="form-group">
+            <label>Termination / Closure Date (if any)</label>
+            <input type="date" id="termDate" value="">
+        </div>
+        <div class="form-group">
             <label>Joining in this School</label>
             <input type="date" id="schoolJoining" value="">
         </div>
@@ -316,6 +320,7 @@
                 <button type="button" class="btn-print" onclick="savePfRecord()">💾 Save Staff Record</button>
                 <button type="button" class="btn-print" style="background:#0f766e;" onclick="printPfStatement()">🖨 Print PF Statement (A4 Landscape)</button>
                 <button type="button" class="btn-add" onclick="addNewPfEmployee()">＋ Add New Emp</button>
+                <button type="button" class="btn-add" style="background:#be123c;" onclick="fillFinalSettlement()">💰 Final Settlement (full balance)</button>
                 <button type="button" class="btn-add" style="background:#b45309;" id="relinkBtn" onclick="rederiveObFromPrev()">↻ Re-link OB to 2025–26 CB</button>
                 <button type="button" class="btn-del" onclick="deletePfRecord()">🗑 Delete</button>
             </div>
@@ -615,36 +620,62 @@ function mergeExcelPfMaster(records) {
 
 
 /* ===== Carry-forward: Closing Balance of one FY -> Opening Balance of the next ===== */
-function computeFySummary(rec, fyStart) {
+/* One engine for the table, the side-by-side box and the OB carry-forward.
+   Rules:
+   - Interest accrues monthly on (OB + deposits within 15th - withdrawals) but is normally credited on 31-03.
+   - Contributions stop 6 months before DOR (or after the termination month, if a termination date is set).
+   - Interest stops from the month AFTER the retirement / termination month.
+   - On retirement / termination, interest accrued up to that month is CREDITED at closure (end of that month),
+     so the final settlement never drives the running balance negative. */
+function simulateFY(rec, fyStart) {
     const arr = (a, fill) => (Array.isArray(a) && a.length === 12) ? a : Array(12).fill(fill);
     const dep15  = arr(rec.monthlyDepWithin, 0);
     const depAft = arr(rec.monthlyDepAfter, rec.defaultDepAfter !== undefined ? rec.defaultDepAfter : 0);
     const wdArr  = arr(rec.monthlyWd, 0);
     const roiArr = arr(rec.monthlyRoi, rec.roi !== undefined ? rec.roi : 7.1);
     const ob = Number(rec.ob) || 0;
-    let bal = ob, interest = 0, dep = 0, wdT = 0;
-    let cutoffStart = null, dorMonthStart = null;
-    if (rec.dor) {
-        const d = new Date(rec.dor + 'T00:00:00');
-        const c = new Date(d); c.setMonth(c.getMonth() - 6);
-        cutoffStart = new Date(c.getFullYear(), c.getMonth(), 1);
-        dorMonthStart = new Date(d.getFullYear(), d.getMonth(), 1);
-    }
+    const mStart = d => new Date(d.getFullYear(), d.getMonth(), 1);
+    const dorD  = rec.dor ? new Date(rec.dor + 'T00:00:00') : null;
+    const termD = rec.termDate ? new Date(rec.termDate + 'T00:00:00') : null;
+    let cutoffStart = null;
+    if (dorD) { const c = new Date(dorD); c.setMonth(c.getMonth() - 6); cutoffStart = mStart(c); }
+    const termStart = termD ? mStart(termD) : null;
+    let endStart = null;                                   // month in which the account closes
+    [dorD, termD].forEach(d => { if (d) { const m = mStart(d); if (!endStart || m < endStart) endStart = m; } });
+
+    let bal = ob, accrued = 0, dep = 0, wdT = 0, credited = 0, closeIdx = -1, minClose = Infinity;
+    const months = [];
     for (let i = 0; i < 12; i++) {
-        const monthStart = new Date(i < 9 ? fyStart : fyStart + 1, i < 9 ? i + 3 : i - 9, 1);
-        const stopped = cutoffStart && monthStart >= cutoffStart;
-        const noInterest = dorMonthStart && monthStart > dorMonthStart;   // interest stops from the month after retirement
-        const w = stopped ? 0 : (Number(dep15[i]) || 0);
-        const a = stopped ? 0 : (Number(depAft[i]) || 0);
+        const ms = new Date(i < 9 ? fyStart : fyStart + 1, i < 9 ? i + 3 : i - 9, 1);
+        const pfStopped = (cutoffStart && ms >= cutoffStart) || (termStart && ms > termStart);
+        const intStopped = !!(endStart && ms > endStart);
+        const op = bal;
+        const w = pfStopped ? 0 : (Number(dep15[i]) || 0);
+        const a = pfStopped ? 0 : (Number(depAft[i]) || 0);
         const wd = Number(wdArr[i]) || 0;
-        let lowest = bal + w - wd; if (lowest < 0) lowest = 0;
+        let lowest = op + w - wd; if (lowest < 0) lowest = 0;
         let roi = Number(roiArr[i]); if (!isFinite(roi) || roi < 0) roi = 7.1;
-        if (!noInterest) interest += lowest * ((roi / 100) / 12);
-        bal = bal + w + a - wd;
+        const interest = intStopped ? 0 : lowest * ((roi / 100) / 12);
+        accrued += interest;
+        bal = op + w + a - wd;
+        let credit = 0;
+        if (endStart && ms.getTime() === endStart.getTime()) {   // closure month: credit accrued interest now
+            credit = Math.round(accrued); credited = credit; closeIdx = i; bal += credit; accrued = 0;
+        }
         dep += w + a; wdT += wd;
+        if (bal < minClose) minClose = bal;
+        months.push({ op, roi, w, a, wd, lowest, interest, credit, close: bal, pfStopped, intStopped, negative: bal < -0.5 });
     }
-    const intR = Math.round(interest);
-    return { ob, dep, wd: wdT, interest: intR, cb: Math.round(bal + intR) };
+    let interestTotal;
+    if (closeIdx >= 0) interestTotal = credited;            // already credited at closure
+    else { interestTotal = Math.round(accrued); bal += interestTotal; }
+    return { months, ob, dep, wd: wdT, interest: interestTotal, cb: Math.round(bal), closeIdx, closedInFY: closeIdx >= 0,
+             hasNegative: minClose < -0.5 };
+}
+
+function computeFySummary(rec, fyStart) {
+    const r = simulateFY(rec, fyStart);
+    return { ob: r.ob, dep: r.dep, wd: r.wd, interest: r.interest, cb: r.cb };
 }
 
 function computeClosingBalance(rec, fyStart) { return computeFySummary(rec, fyStart).cb; }
@@ -807,6 +838,7 @@ function onPfEmployeeSelect() {
         document.getElementById('doj').value = emp.firstJoining || emp.doj || '';
         document.getElementById('dob').value = emp.dob || '';
         document.getElementById('dor').value = emp.dor || '';
+        document.getElementById('termDate').value = emp.termDate || '';
         document.getElementById('schoolJoining').value = emp.schoolJoining || '';
         document.getElementById('iosmsId').value = emp.iosms || '';
         document.getElementById('ngipfAc').value = emp.ngipf || '';
@@ -892,99 +924,87 @@ function updateMonthlyVal(monthIdx, type, val) {
     persistCurrentPfRecord(false);
 }
 
+function liveRecForSim() {
+    return {
+        ob: parseFloat(document.getElementById('pfOb2025').value) || 0,
+        dor: document.getElementById('dor').value || '',
+        termDate: (document.getElementById('termDate') || {}).value || '',
+        defaultDepAfter: parseFloat(document.getElementById('pfDefaultMonthlyDep').value) || 0,
+        roi: parseFloat(document.getElementById('pfRoi').value) || 7.1,
+        monthlyDepWithin: monthlyDepWithinCache, monthlyDepAfter: monthlyDepAfterCache,
+        monthlyWd: monthlyWdCache, monthlyRoi: monthlyRoiCache
+    };
+}
+
 function renderPfTableInputs() {
     const y0 = FY[currentFY].start;
     const monthNames = FY_MONTH_NAMES.map((m, i) => `${m} ${i < 9 ? y0 : y0 + 1}`);
-    let ob = parseFloat(document.getElementById('pfOb2025').value) || 0;
-    let defaultRoi = parseFloat(document.getElementById('pfRoi').value) || 7.1;
+    const defaultRoi = parseFloat(document.getElementById('pfRoi').value) || 7.1;
     if (!monthlyRoiCache || monthlyRoiCache.length !== 12) monthlyRoiCache = Array(12).fill(defaultRoi);
 
-    let currentBal = ob; // Pure Physical Balance
-    let totalWithin = 0;
-    let totalAfter = 0;
-    let totalWd = 0;
-    let totalInterestExact = 0;
+    const sim = simulateFY(liveRecForSim(), y0);
+    const fmt = v => Math.round(v).toLocaleString('en-IN');
     let tbodyHtml = "";
 
-    monthNames.forEach((mName, i) => {
-        let monthOp = currentBal;
-        let within15 = monthlyDepWithinCache[i] !== undefined ? monthlyDepWithinCache[i] : 0;
-        let after15 = monthlyDepAfterCache[i] !== undefined ? monthlyDepAfterCache[i] : 0;
-        let wd = monthlyWdCache[i] !== undefined ? monthlyWdCache[i] : 0;
-
-        // PF contribution auto-stops from the month in which the 6-month-before-retirement cutoff falls.
-        const dorStr = document.getElementById('dor').value;
-        let pfContributionStopped = false;
-        if (dorStr) {
-            const retirement = new Date(dorStr + 'T00:00:00');
-            const cutoff = new Date(retirement);
-            cutoff.setMonth(cutoff.getMonth() - 6);
-            // Contribution is stopped from the month in which the exact 6-month-before-retirement date falls.
-            const monthStart = new Date(i < 9 ? y0 : y0 + 1, i < 9 ? i + 3 : i - 9, 1);
-            const cutoffMonthStart = new Date(cutoff.getFullYear(), cutoff.getMonth(), 1);
-            pfContributionStopped = monthStart >= cutoffMonthStart;
-        }
-        if (pfContributionStopped) { within15 = 0; after15 = 0; }
-
-        // Running balance for the month (DOES NOT include uncredited interest)
-        let closeBal = monthOp + within15 + after15 - wd;
-
-        // Lowest balance eligible for interest calculation (Opening + Deposited within 15th - Withdrawals)
-        let lowestBal = monthOp + within15 - wd;
-        if (lowestBal < 0) lowestBal = 0;
-
-        let monthRoi = Number(monthlyRoiCache[i]);
-        if (!isFinite(monthRoi) || monthRoi < 0) monthRoi = defaultRoi;
-        let interestStopped = false;
-        if (dorStr) {
-            const dd = new Date(dorStr + 'T00:00:00');
-            const dorMonthStart = new Date(dd.getFullYear(), dd.getMonth(), 1);
-            const mStart = new Date(i < 9 ? y0 : y0 + 1, i < 9 ? i + 3 : i - 9, 1);
-            interestStopped = mStart > dorMonthStart;      // no interest from the month after retirement
-        }
-        let monthlyInterest = interestStopped ? 0 : (lowestBal * ((monthRoi / 100) / 12));
-        
-        totalWithin += within15;
-        totalAfter += after15;
-        totalWd += wd;
-        totalInterestExact += monthlyInterest;
-        currentBal = closeBal;
-
+    sim.months.forEach((m, i) => {
+        const tag = (txt, col) => `<br><small style="color:${col};font-weight:700;">${txt}</small>`;
+        const labels =
+            (m.pfStopped ? tag('PF STOPPED (6M BEFORE DOR)', '#b91c1c') : '') +
+            (m.intStopped ? tag('INTEREST STOPPED (AFTER DOR)', '#7c2d12') : '') +
+            (m.credit ? tag(`INTEREST ₹ ${fmt(m.credit)} CREDITED ON CLOSURE`, '#047857') : '') +
+            (m.negative ? tag(`⚠ EXCESS WITHDRAWAL ₹ ${fmt(-m.close)}`, '#dc2626') : '');
+        const closeStyle = m.negative ? 'color:#dc2626;' : '';
         tbodyHtml += `
-            <tr>
-                <td><strong>${mName}</strong>${pfContributionStopped ? '<br><small style="color:#b91c1c;font-weight:700;">PF STOPPED (6M BEFORE DOR)</small>' : ''}${interestStopped ? '<br><small style="color:#7c2d12;font-weight:700;">INTEREST STOPPED (AFTER DOR)</small>' : ''}</td>
-                <td>₹ ${Math.round(monthOp).toLocaleString('en-IN')}</td>
-                <td><input type="number" id="roi_${i}" value="${monthRoi.toFixed(2)}" step="0.01" min="0" style="width:72px;text-align:center;" oninput="updateMonthlyVal(${i}, 'roi', this.value)"></td>
-                <td><input type="number" id="dep_within_${i}" value="${within15}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'within', this.value)"></td>
-                <td><input type="number" id="dep_after_${i}" value="${after15}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'after', this.value)"></td>
-                <td><input type="number" id="wd_${i}" value="${wd}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'wd', this.value)"></td>
-                <td>₹ ${Math.round(lowestBal).toLocaleString('en-IN')}</td>
-                <td>₹ ${monthlyInterest.toFixed(2)}</td>
-                <td><strong>₹ ${Math.round(closeBal).toLocaleString('en-IN')}</strong></td>
+            <tr${m.negative ? ' style="background:#fee2e2;"' : ''}>
+                <td><strong>${monthNames[i]}</strong>${labels}</td>
+                <td>₹ ${fmt(m.op)}</td>
+                <td><input type="number" id="roi_${i}" value="${m.roi.toFixed(2)}" step="0.01" min="0" style="width:72px;text-align:center;" oninput="updateMonthlyVal(${i}, 'roi', this.value)"></td>
+                <td><input type="number" id="dep_within_${i}" value="${m.w}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'within', this.value)"></td>
+                <td><input type="number" id="dep_after_${i}" value="${m.a}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'after', this.value)"></td>
+                <td><input type="number" id="wd_${i}" value="${m.wd}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'wd', this.value)"></td>
+                <td>₹ ${fmt(m.lowest)}</td>
+                <td>₹ ${m.interest.toFixed(2)}</td>
+                <td><strong style="${closeStyle}">₹ ${fmt(m.close)}</strong></td>
             </tr>`;
     });
 
-    // End of year processing (Adding Interest to Principal)
-    let totalInterestRounded = Math.round(totalInterestExact); // Standard .5 rule
-    let finalYearEndBalance = currentBal + totalInterestRounded;
-
+    const closureLabel = sim.closedInFY
+        ? `Total Interest Allowed (Credited on closure — ${monthNames[sim.closeIdx]}):`
+        : `Total Interest Allowed (Credited on 31-03-${y0 + 1}):`;
     tbodyHtml += `
         <tr style="background:#fef3c7; border-top: 2px solid #cbd5e1;">
-            <td colspan="7" style="text-align:right; font-weight:bold;">Total Interest Allowed (Credited on 31-03-${y0 + 1}):</td>
-            <td style="font-weight:bold; color:#059669; font-size:0.9rem;">₹ ${totalInterestRounded.toLocaleString('en-IN')}</td>
+            <td colspan="7" style="text-align:right; font-weight:bold;">${closureLabel}</td>
+            <td style="font-weight:bold; color:#059669; font-size:0.9rem;">₹ ${sim.interest.toLocaleString('en-IN')}</td>
             <td></td>
         </tr>
         <tr style="background:#1e293b; color:#fff;">
             <td colspan="8" style="text-align:right; font-weight:bold; font-size:0.9rem;">Final Closing Balance as on 31-03-${y0 + 1}:</td>
-            <td style="font-weight:bold; font-size:1rem; color:#10b981;">₹ ${Math.round(finalYearEndBalance).toLocaleString('en-IN')}</td>
+            <td style="font-weight:bold; font-size:1rem; color:#10b981;">₹ ${fmt(sim.cb)}</td>
         </tr>
     `;
-
     document.getElementById('pfTableBody2025').innerHTML = tbodyHtml;
-
-
-
 }
+
+/* Fills the withdrawal of the month after closure with the exact full balance (OB + deposits + interest credited). */
+function fillFinalSettlement() {
+    const y0 = FY[currentFY].start;
+    const rec = liveRecForSim();
+    const first = simulateFY(rec, y0);
+    if (!first.closedInFY) { alert('No retirement / termination month falls in ' + FY[currentFY].label + '. Set DOR or Termination Date first.'); return; }
+    const t = first.closeIdx + 1;
+    if (t > 11) { alert('Closure is in the last month of the year; enter the final payment in the next financial year.'); return; }
+    monthlyWdCache[t] = 0;
+    const sim = simulateFY(liveRecForSim(), y0);
+    const amount = Math.round(sim.months[first.closeIdx].close);
+    monthlyWdCache[t] = Math.max(0, amount);
+    calculatePF2025_26();
+    persistCurrentPfRecord(false);
+    const st = document.getElementById('pfSaveStatus');
+    st.textContent = `✓ Final settlement ₹ ${amount.toLocaleString('en-IN')} entered in ${FY_MONTH_NAMES[t]} — balance now ₹ 0`;
+    setTimeout(() => { st.textContent = ''; }, 5000);
+}
+
+function onClosureDateChange() { calculatePF2025_26(); persistCurrentPfRecord(false); }
 
 function calculatePF2025_26() {
     updateStaffHeader();
@@ -1002,6 +1022,7 @@ function persistCurrentPfRecord(showStatus = false) {
     const doj = document.getElementById('doj').value || '';
     const dob = document.getElementById('dob').value || '';
     const dor = document.getElementById('dor').value || '';
+    const termDate = document.getElementById('termDate').value || '';
     const schoolJoining = document.getElementById('schoolJoining').value || '';
     const ob = parseFloat(document.getElementById('pfOb2025').value) || 0;
     const defaultDepAfter = parseFloat(document.getElementById('pfDefaultMonthlyDep').value) || 0;
@@ -1010,7 +1031,7 @@ function persistCurrentPfRecord(showStatus = false) {
     const ngipf = document.getElementById('ngipfAc').value.trim() || old.ngipf || '';
 
     activeStaffRecords[idx] = {
-        ...old, name, designation, doj, dob, dor, schoolJoining, firstJoining: doj, iosms, ngipf, ob, defaultDepAfter, roi,
+        ...old, name, designation, doj, dob, dor, termDate, schoolJoining, firstJoining: doj, iosms, ngipf, ob, defaultDepAfter, roi,
         monthlyDepWithin: [...monthlyDepWithinCache],
         monthlyDepAfter: [...monthlyDepAfterCache],
         monthlyWd: [...monthlyWdCache],
@@ -1128,6 +1149,7 @@ window.addEventListener('DOMContentLoaded', () => {
     applyFyLabels();
     initPfDropdown();
     onPfEmployeeSelect();
+    ['dor','termDate'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('change', onClosureDateChange); });
     ['staffName','designation','doj','dob','dor','schoolJoining'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', updateStaffHeader);
