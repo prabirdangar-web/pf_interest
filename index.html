@@ -290,11 +290,19 @@
         </div>
     </div>
 
-    <!-- PROVIDENT FUND (PF) 2025-26 WINDOW -->
+    <!-- PROVIDENT FUND (PF) 2026-27 WINDOW -->
     <section id="pfPrintArea">
-<h3 style="margin-top:30px;border-top:3px solid var(--secondary-color);padding-top:20px;">7. Provident Fund (PF) Calculation & Auto-Contribution (2025–26)</h3>
+<h3 style="margin-top:30px;border-top:3px solid var(--secondary-color);padding-top:20px;">7. Provident Fund (PF) Calculation & Auto-Contribution <span id="fyTitleYear">(2026–27)</span></h3>
     <div class="panel" style="background:#ecfdf5;border:2px solid #10b981;">
-        <div style="font-weight:800;font-size:1rem;color:#065f46;margin-bottom:8px;">PF A/C No. 8 — Financial Year 2025–26 Setup & Management</div>
+        <div style="font-weight:800;font-size:1rem;color:#065f46;margin-bottom:8px;">PF A/C No. 8 — Financial Year <span id="fySub">2026–27</span> Setup & Management</div>
+
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
+            <strong style="color:#065f46;">Financial Year:</strong>
+            <button type="button" id="fyTab2025" class="btn-add" onclick="switchFY(2025)">2025–26</button>
+            <button type="button" id="fyTab2026" class="btn-add" onclick="switchFY(2026)">2026–27</button>
+            <span id="fyLinkNote" style="font-size:.8rem;font-weight:700;color:#7c2d12;"></span>
+        </div>
+        <div id="fySideBySide" class="no-print" style="margin-bottom:12px;overflow-x:auto;"></div>
         
         <!-- Save/Load & Employee Controls -->
         <div class="grid-inputs" style="background:#fff;padding:12px;border-radius:6px;border:1px solid #cbd5e1;margin-bottom:15px;">
@@ -308,6 +316,7 @@
                 <button type="button" class="btn-print" onclick="savePfRecord()">💾 Save Staff Record</button>
                 <button type="button" class="btn-print" style="background:#0f766e;" onclick="printPfStatement()">🖨 Print PF Statement (A4 Landscape)</button>
                 <button type="button" class="btn-add" onclick="addNewPfEmployee()">＋ Add New Emp</button>
+                <button type="button" class="btn-add" style="background:#b45309;" id="relinkBtn" onclick="rederiveObFromPrev()">↻ Re-link OB to 2025–26 CB</button>
                 <button type="button" class="btn-del" onclick="deletePfRecord()">🗑 Delete</button>
             </div>
             <div class="form-group" style="display:flex;align-items:end;gap:6px;flex-wrap:wrap;">
@@ -347,8 +356,8 @@
 
         <div class="grid-inputs">
             <div class="form-group">
-                <label>Opening Balance (OB) for 2025–26 (₹) [from 2024–25 Actual CB]</label>
-                <input type="number" id="pfOb2025" value="4227729" step="1" oninput="calculatePF2025_26()">
+                <label id="fyObLabel">Opening Balance (OB) (₹)</label>
+                <input type="number" id="pfOb2025" value="0" step="1" oninput="onObInput()">
             </div>
             <div class="form-group">
                 <label>Default Monthly Deposit after 15th (₹)</label>
@@ -371,7 +380,7 @@
                     <th>Joining in School</th>
                     <th>IOSMS ID</th>
                     <th>NGIPF A/C No.</th>
-                    <th>Opening Balance (2025–26)</th>
+                    <th id="fyObTh">Opening Balance (2026–27)</th>
                 </tr>
                 <tr>
                     <td id="printStaffName">—</td>
@@ -430,6 +439,8 @@
     // Single shared document, matching the rest of the TFHS suite's storage pattern:
     // one document per tool at /tfhs/{toolName}, holding the whole dataset as a field.
     const pfDocRef = db.doc("tfhs/pfInterest");
+    // FY 2026-27 lives in its own field of the same document; the 2025-26 `records` field is never touched.
+    const CLOUD_FIELD = 'records2627';
     let currentUser = null;
 
     // Tags every write from this browser tab so the real-time listener can tell
@@ -518,41 +529,50 @@ const defaultPfStaff = [
   { name: "SHEPHALI MAJI; A.T.", ob: 0, defaultDepAfter: 25000 }
 ];
 
-const STORAGE_KEY = 'TFHS_PF_2025_26_RECORDS_V8';
+const FY = {
+    2025: { start: 2025, label: '2025–26', key: 'TFHS_PF_2025_26_RECORDS_V8', field: 'records' },
+    2026: { start: 2026, label: '2026–27', key: 'TFHS_PF_2026_27_RECORDS_V1', field: 'records2627' }
+};
+const FY_MONTH_NAMES = ["April","May","June","July","August","September","October","November","December","January","February","March"];
+let currentFY = Number(localStorage.getItem('TFHS_PF_FY')) === 2025 ? 2025 : 2026;
+const recordsByFY = { 2025: [], 2026: [] };
+const cloudTimers = {};
+const sentWriteIds = new Set();
 let monthlyDepWithinCache = Array(12).fill(0);
 let monthlyDepAfterCache = Array(12).fill(30000);
 let monthlyWdCache = Array(12).fill(0);
 let monthlyRoiCache = Array(12).fill(7.1);
 
-function getSavedRecords() {
+function getSavedRecords(fy = currentFY) {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(FY[fy].key);
         if (!raw) return null;
         return JSON.parse(raw);
     } catch (_) { return null; }
 }
 
-function saveRecordsToStorage(records, pushToCloud = true) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    if (pushToCloud) queueCloudSave(records);
+function saveRecordsToStorage(records, pushToCloud = true, fy = currentFY) {
+    localStorage.setItem(FY[fy].key, JSON.stringify(records));
+    if (pushToCloud) queueCloudSave(records, fy);
+    // 2025-26 changed -> its closing balance feeds 2026-27 opening balance
+    if (fy === 2025) syncObChain(pushToCloud);
 }
 
-function queueCloudSave(records) {
-    // Debounce: batch up every keystroke's autosave into one Firestore write
-    // ~700ms after the user pauses, instead of writing on every keypress.
-    clearTimeout(cloudWriteTimer);
-    cloudWriteTimer = setTimeout(() => pushRecordsToCloud(records), 700);
+function queueCloudSave(records, fy = currentFY) {
+    // Debounce per financial year: batch every keystroke's autosave into one Firestore write.
+    clearTimeout(cloudTimers[fy]);
+    cloudTimers[fy] = setTimeout(() => pushRecordsToCloud(records, fy), 700);
 }
 
-function pushRecordsToCloud(records) {
+function pushRecordsToCloud(records, fy = currentFY) {
     if (!currentUser) {
         document.getElementById("syncStatus").textContent = "Not signed in — changes are saved on this device only";
         return;
     }
     const writeId = clientSessionId + '_' + (++writeCounter);
-    lastSentWriteId = writeId;
+    sentWriteIds.add(writeId);
     pfDocRef.set({
-        records: records,
+        [FY[fy].field]: records,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         lastWriteId: writeId,
         updatedBy: currentUser.email
@@ -560,6 +580,27 @@ function pushRecordsToCloud(records) {
         console.error("Firestore save error:", err);
         document.getElementById("syncStatus").textContent = "⚠ Cloud save failed — check connection";
     });
+}
+
+function pushAllToCloud() {
+    if (!currentUser) return;
+    const writeId = clientSessionId + '_' + (++writeCounter);
+    sentWriteIds.add(writeId);
+    pfDocRef.set({
+        [FY[2025].field]: recordsByFY[2025],
+        [FY[2026].field]: recordsByFY[2026],
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastWriteId: writeId,
+        updatedBy: currentUser.email
+    }, { merge: true }).catch(err => {
+        console.error("Firestore save error:", err);
+        document.getElementById("syncStatus").textContent = "⚠ Cloud save failed — check connection";
+    });
+}
+
+function setRecords(fy, recs) {
+    recordsByFY[fy] = recs;
+    if (fy === currentFY) activeStaffRecords = recs;
 }
 
 function mergeExcelPfMaster(records) {
@@ -572,12 +613,170 @@ function mergeExcelPfMaster(records) {
     });
 }
 
-let activeStaffRecords = mergeExcelPfMaster(getSavedRecords() || defaultPfStaff);
 
-// If the saved browser data is old, immediately upgrade it with Excel IOSMS/NGIPF master data.
-// Local-only (no cloud push) — we don't yet know what the cloud document holds,
-// and pushing here could race ahead of the real-time listener and clobber it.
-saveRecordsToStorage(activeStaffRecords, false);
+/* ===== Carry-forward: Closing Balance of one FY -> Opening Balance of the next ===== */
+function computeFySummary(rec, fyStart) {
+    const arr = (a, fill) => (Array.isArray(a) && a.length === 12) ? a : Array(12).fill(fill);
+    const dep15  = arr(rec.monthlyDepWithin, 0);
+    const depAft = arr(rec.monthlyDepAfter, rec.defaultDepAfter !== undefined ? rec.defaultDepAfter : 0);
+    const wdArr  = arr(rec.monthlyWd, 0);
+    const roiArr = arr(rec.monthlyRoi, rec.roi !== undefined ? rec.roi : 7.1);
+    const ob = Number(rec.ob) || 0;
+    let bal = ob, interest = 0, dep = 0, wdT = 0;
+    let cutoffStart = null;
+    if (rec.dor) {
+        const c = new Date(rec.dor + 'T00:00:00'); c.setMonth(c.getMonth() - 6);
+        cutoffStart = new Date(c.getFullYear(), c.getMonth(), 1);
+    }
+    for (let i = 0; i < 12; i++) {
+        const monthStart = new Date(i < 9 ? fyStart : fyStart + 1, i < 9 ? i + 3 : i - 9, 1);
+        const stopped = cutoffStart && monthStart >= cutoffStart;
+        const w = stopped ? 0 : (Number(dep15[i]) || 0);
+        const a = stopped ? 0 : (Number(depAft[i]) || 0);
+        const wd = Number(wdArr[i]) || 0;
+        let lowest = bal + w - wd; if (lowest < 0) lowest = 0;
+        let roi = Number(roiArr[i]); if (!isFinite(roi) || roi < 0) roi = 7.1;
+        interest += lowest * ((roi / 100) / 12);
+        bal = bal + w + a - wd;
+        dep += w + a; wdT += wd;
+    }
+    const intR = Math.round(interest);
+    return { ob, dep, wd: wdT, interest: intR, cb: Math.round(bal + intR) };
+}
+
+function computeClosingBalance(rec, fyStart) { return computeFySummary(rec, fyStart).cb; }
+
+function _pfKey(n) { return String(n || '').replace(/\s*;.*$/, '').replace(/\s+/g, ' ').trim().toUpperCase(); }
+
+function getPrevYearRecords() { return recordsByFY[2025]; }
+
+function buildFromPrevYear(prev) {
+    return mergeExcelPfMaster(prev).map(r => {
+        const cb = computeClosingBalance(r, 2025);
+        const roi = r.roi !== undefined ? r.roi : 7.1;
+        const dep = r.defaultDepAfter !== undefined ? r.defaultDepAfter : 0;
+        return { ...r, ob: cb, prevCB2526: cb, defaultDepAfter: dep, roi,
+                 monthlyDepWithin: Array(12).fill(0), monthlyDepAfter: Array(12).fill(dep),
+                 monthlyWd: Array(12).fill(0), monthlyRoi: Array(12).fill(roi) };
+    });
+}
+
+function linkedObFor(rec) {
+    const p = recordsByFY[2025].find(x => _pfKey(x.name) === _pfKey(rec.name));
+    return p ? computeClosingBalance(p, 2025) : null;
+}
+
+// Keeps 2026-27 OB = live closing balance of 2025-26 (unless an OB was manually overridden).
+function syncObChain(push = true) {
+    const cur = recordsByFY[2026];
+    let changed = false;
+    recordsByFY[2025].forEach(p => {
+        const k = _pfKey(p.name);
+        const cb = computeClosingBalance(p, 2025);
+        const c = cur.find(x => _pfKey(x.name) === k);
+        if (!c) { cur.push(buildFromPrevYear([p])[0]); changed = true; return; }
+        if (c.obLinked !== false && (c.ob !== cb || c.prevCB2526 !== cb)) { c.ob = cb; c.prevCB2526 = cb; changed = true; }
+    });
+    if (changed) {
+        localStorage.setItem(FY[2026].key, JSON.stringify(cur));
+        if (push) queueCloudSave(cur, 2026);
+        if (currentFY === 2026) {
+            const r = activeStaffRecords[window._pfCurrentIdx];
+            const inp = document.getElementById('pfOb2025');
+            if (r && inp) { inp.value = r.ob; }
+        }
+    }
+    return changed;
+}
+
+function onObInput() {
+    if (currentFY === 2026) {
+        const rec = activeStaffRecords[window._pfCurrentIdx];
+        if (rec) {
+            const link = linkedObFor(rec);
+            const v = parseFloat(document.getElementById('pfOb2025').value) || 0;
+            rec.obLinked = (link !== null && v === link) ? true : (link === null ? false : false);
+        }
+    }
+    calculatePF2025_26();
+    persistCurrentPfRecord(false);
+}
+
+function rederiveObFromPrev() {
+    if (currentFY !== 2026) return;
+    const rec = activeStaffRecords[window._pfCurrentIdx]; if (!rec) return;
+    const status = document.getElementById('pfSaveStatus');
+    const cb = linkedObFor(rec);
+    if (cb === null) { status.textContent = '⚠ No 2025–26 record found for this employee.'; return; }
+    rec.obLinked = true;
+    document.getElementById('pfOb2025').value = cb;
+    calculatePF2025_26();
+    persistCurrentPfRecord(false);
+    status.textContent = `✓ OB re-linked to 2025–26 closing balance ₹ ${cb.toLocaleString('en-IN')}`;
+    setTimeout(() => { status.textContent = ''; }, 4000);
+}
+
+function switchFY(fy) {
+    fy = Number(fy);
+    if (fy === currentFY) return;
+    persistCurrentPfRecord(false);
+    const name = (activeStaffRecords[window._pfCurrentIdx] || {}).name;
+    currentFY = fy;
+    localStorage.setItem('TFHS_PF_FY', String(fy));
+    activeStaffRecords = recordsByFY[fy];
+    window._pfCurrentIdx = undefined;     // don't save the old year's caches into the new year
+    applyFyLabels();
+    initPfDropdown(name);
+    onPfEmployeeSelect();
+}
+
+function applyFyLabels() {
+    const L = FY[currentFY].label;
+    const set = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
+    set('fyTitleYear', `(${L})`);
+    set('fySub', L);
+    set('fyObTh', `Opening Balance (${L})`);
+    set('fyObLabel', currentFY === 2026
+        ? 'Opening Balance (OB) 2026–27 (₹) [auto = Closing Balance of 2025–26; edit to override]'
+        : 'Opening Balance (OB) 2025–26 (₹) [from 2024–25 Actual CB]');
+    [2025, 2026].forEach(y => {
+        const b = document.getElementById('fyTab' + y);
+        if (b) { b.style.background = (y === currentFY) ? '#065f46' : '#94a3b8'; b.style.outline = (y === currentFY) ? '3px solid #10b981' : 'none'; }
+    });
+    const rb = document.getElementById('relinkBtn'); if (rb) rb.style.display = currentFY === 2026 ? '' : 'none';
+    if (typeof initGpfMonthSelect === 'function') initGpfMonthSelect();
+}
+
+function renderFySummary() {
+    const box = document.getElementById('fySideBySide'); if (!box) return;
+    const cur = activeStaffRecords[window._pfCurrentIdx]; if (!cur) { box.innerHTML = ''; return; }
+    const k = _pfKey(cur.name);
+    const r25 = recordsByFY[2025].find(x => _pfKey(x.name) === k);
+    const r26 = recordsByFY[2026].find(x => _pfKey(x.name) === k);
+    const S25 = r25 ? computeFySummary(r25, 2025) : null;
+    const S26 = r26 ? computeFySummary(r26, 2026) : null;
+    const f = v => v === undefined || v === null ? '—' : '₹ ' + Number(v).toLocaleString('en-IN');
+    const row = (lab, key, bold) => `<tr${bold ? ' style="font-weight:800;background:#ecfdf5;"' : ''}><td style="text-align:left;">${lab}</td><td>${S25 ? f(S25[key]) : '—'}</td><td>${S26 ? f(S26[key]) : '—'}</td></tr>`;
+    let note = '';
+    if (S25 && S26) {
+        if (r26.obLinked === false) note = S26.ob === S25.cb ? '' : `⚠ 2026–27 OB is a manual override (differs from 2025–26 CB by ₹ ${Math.abs(S26.ob - S25.cb).toLocaleString('en-IN')}).`;
+        else note = '🔗 2026–27 OB is linked to 2025–26 CB — any correction in 2025–26 updates it automatically.';
+    }
+    document.getElementById('fyLinkNote').textContent = note;
+    box.innerHTML = `<table style="border-collapse:collapse;font-size:.8rem;min-width:420px;background:#fff;">
+        <thead><tr style="background:#1e293b;color:#fff;"><th style="padding:4px 10px;text-align:left;">${_pfKey(cur.name)}</th><th style="padding:4px 10px;">2025–26</th><th style="padding:4px 10px;">2026–27</th></tr></thead>
+        <tbody>${row('Opening Balance','ob')}${row('Total Deposits','dep')}${row('Withdrawals','wd')}${row('Interest Credited (31-03)','interest')}${row('Closing Balance','cb',true)}</tbody></table>`;
+    box.querySelectorAll('td,th').forEach(e => { e.style.border = '1px solid #cbd5e1'; if (e.tagName === 'TD' && e.cellIndex > 0) { e.style.padding = '3px 10px'; e.style.textAlign = 'right'; } else if (e.tagName === 'TD') e.style.padding = '3px 10px'; });
+}
+
+recordsByFY[2025] = mergeExcelPfMaster(getSavedRecords(2025) || defaultPfStaff);
+recordsByFY[2026] = mergeExcelPfMaster(getSavedRecords(2026) || buildFromPrevYear(recordsByFY[2025]));
+let activeStaffRecords = recordsByFY[currentFY];
+
+// Local-only upgrade of both years (no cloud push yet — we don't know what the cloud holds).
+localStorage.setItem(FY[2025].key, JSON.stringify(recordsByFY[2025]));
+localStorage.setItem(FY[2026].key, JSON.stringify(recordsByFY[2026]));
+syncObChain(false);
 
 function initPfDropdown(selectName = '') {
     const sel = document.getElementById('pfEmpSelect');
@@ -691,7 +890,8 @@ function updateMonthlyVal(monthIdx, type, val) {
 }
 
 function renderPfTableInputs() {
-    const monthNames = ["April 2025", "May 2025", "June 2025", "July 2025", "August 2025", "September 2025", "October 2025", "November 2025", "December 2025", "January 2026", "February 2026", "March 2026"];
+    const y0 = FY[currentFY].start;
+    const monthNames = FY_MONTH_NAMES.map((m, i) => `${m} ${i < 9 ? y0 : y0 + 1}`);
     let ob = parseFloat(document.getElementById('pfOb2025').value) || 0;
     let defaultRoi = parseFloat(document.getElementById('pfRoi').value) || 7.1;
     if (!monthlyRoiCache || monthlyRoiCache.length !== 12) monthlyRoiCache = Array(12).fill(defaultRoi);
@@ -717,7 +917,7 @@ function renderPfTableInputs() {
             const cutoff = new Date(retirement);
             cutoff.setMonth(cutoff.getMonth() - 6);
             // Contribution is stopped from the month in which the exact 6-month-before-retirement date falls.
-            const monthStart = new Date(i < 9 ? 2025 : 2026, i < 9 ? i + 3 : i - 9, 1);
+            const monthStart = new Date(i < 9 ? y0 : y0 + 1, i < 9 ? i + 3 : i - 9, 1);
             const cutoffMonthStart = new Date(cutoff.getFullYear(), cutoff.getMonth(), 1);
             pfContributionStopped = monthStart >= cutoffMonthStart;
         }
@@ -760,12 +960,12 @@ function renderPfTableInputs() {
 
     tbodyHtml += `
         <tr style="background:#fef3c7; border-top: 2px solid #cbd5e1;">
-            <td colspan="7" style="text-align:right; font-weight:bold;">Total Interest Allowed (Credited on 31-03-2026):</td>
+            <td colspan="7" style="text-align:right; font-weight:bold;">Total Interest Allowed (Credited on 31-03-${y0 + 1}):</td>
             <td style="font-weight:bold; color:#059669; font-size:0.9rem;">₹ ${totalInterestRounded.toLocaleString('en-IN')}</td>
             <td></td>
         </tr>
         <tr style="background:#1e293b; color:#fff;">
-            <td colspan="8" style="text-align:right; font-weight:bold; font-size:0.9rem;">Final Closing Balance as on 31-03-2026:</td>
+            <td colspan="8" style="text-align:right; font-weight:bold; font-size:0.9rem;">Final Closing Balance as on 31-03-${y0 + 1}:</td>
             <td style="font-weight:bold; font-size:1rem; color:#10b981;">₹ ${Math.round(finalYearEndBalance).toLocaleString('en-IN')}</td>
         </tr>
     `;
@@ -779,6 +979,7 @@ function renderPfTableInputs() {
 function calculatePF2025_26() {
     updateStaffHeader();
     renderPfTableInputs();
+    renderFySummary();
 }
 
 function persistCurrentPfRecord(showStatus = false) {
@@ -806,6 +1007,7 @@ function persistCurrentPfRecord(showStatus = false) {
         monthlyRoi: [...monthlyRoiCache]
     };
     saveRecordsToStorage(activeStaffRecords);
+    renderFySummary();
 
     if (showStatus) {
         const status = document.getElementById('pfSaveStatus');
@@ -824,7 +1026,7 @@ function savePfRecord() {
 function addNewPfEmployee() {
     const name = prompt("Enter new employee name & designation (e.g. AMIT DAS ; A.T.):");
     if (!name) return;
-    const ob = parseFloat(prompt("Enter Opening Balance (OB) for 2025–26 (₹):", "0")) || 0;
+    const ob = parseFloat(prompt("Enter Opening Balance (OB) for " + FY[currentFY].label + " (₹):", "0")) || 0;
     const defaultDepAfter = parseFloat(prompt("Enter Default Monthly Deposit after 15th (₹):", "5000")) || 5000;
 
     const designation = deriveDesignation(name);
@@ -860,13 +1062,14 @@ function exportAllPfJson() {
     const data = {
         exportedAt: new Date().toISOString(),
         school: document.getElementById('schoolName').value,
+        fy: FY[currentFY].label,
         records: activeStaffRecords
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `TFHS_PF_2025_26_Records_${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `TFHS_PF_${FY[currentFY].label.replace('–','_')}_Records_${new Date().toISOString().slice(0,10)}.json`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     const status = document.getElementById('pfSaveStatus');
     status.textContent = '✓ Exported all employee PF records to JSON.';
@@ -882,7 +1085,9 @@ function importAllPfJson(event) {
             const parsed = JSON.parse(e.target.result);
             const recs = parsed.records || (Array.isArray(parsed) ? parsed : null);
             if (!recs || !Array.isArray(recs)) throw new Error('Invalid JSON format.');
-            activeStaffRecords = recs;
+            if (parsed.fy && parsed.fy !== FY[currentFY].label && !confirm(`This file is for ${parsed.fy} but you are viewing ${FY[currentFY].label}. Import anyway?`)) return;
+            setRecords(currentFY, recs);
+            window._pfCurrentIdx = undefined;
             saveRecordsToStorage(activeStaffRecords);
             initPfDropdown();
             onPfEmployeeSelect();
@@ -910,6 +1115,7 @@ function printPfStatement() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+    applyFyLabels();
     initPfDropdown();
     onPfEmployeeSelect();
     ['staffName','designation','doj','dob','dor','schoolJoining'].forEach(id => {
@@ -930,40 +1136,29 @@ function initFirebaseSync() {
 
     pfDocRef.onSnapshot(
         snapshot => {
-            const data = snapshot.data();
+            const data = snapshot.data() || {};
+            const c25 = data[FY[2025].field], c26 = data[FY[2026].field];
+            const echo = hasLoadedFromCloud && data.lastWriteId && sentWriteIds.has(data.lastWriteId);
+            const currentName = (activeStaffRecords[window._pfCurrentIdx] || {}).name;
 
-            if (!data || !Array.isArray(data.records)) {
-                // No cloud document yet — seed it from whatever is currently loaded
-                // locally (browser storage / built-in defaults), once signed in.
-                document.getElementById("syncStatus").textContent = hasLoadedFromCloud
-                    ? "Synced — 0 records in cloud ledger"
-                    : "No cloud data yet — using local records";
-                if (!hasLoadedFromCloud && currentUser) {
-                    pushRecordsToCloud(activeStaffRecords);
-                }
-                hasLoadedFromCloud = true;
-                return;
+            if (Array.isArray(c25)) { setRecords(2025, mergeExcelPfMaster(c25)); localStorage.setItem(FY[2025].key, JSON.stringify(recordsByFY[2025])); }
+            if (Array.isArray(c26)) {
+                setRecords(2026, mergeExcelPfMaster(c26)); localStorage.setItem(FY[2026].key, JSON.stringify(recordsByFY[2026]));
+            } else if (!hasLoadedFromCloud && Array.isArray(c25) && !getSavedRecords(2026)) {
+                setRecords(2026, buildFromPrevYear(recordsByFY[2025])); localStorage.setItem(FY[2026].key, JSON.stringify(recordsByFY[2026]));
             }
+            const chainChanged = syncObChain(false);
+            if (currentUser && (!Array.isArray(c26) || chainChanged) && !hasLoadedFromCloud) pushRecordsToCloud(recordsByFY[2026], 2026);
+            else if (currentUser && chainChanged && !echo) pushRecordsToCloud(recordsByFY[2026], 2026);
 
             document.getElementById("syncStatus").textContent =
-                `Synced — ${data.records.length} staff PF record${data.records.length === 1 ? '' : 's'} in cloud`;
+                `Synced — 2025–26: ${recordsByFY[2025].length} · 2026–27: ${recordsByFY[2026].length} staff PF records`;
 
-            // Echo of our own recent write — local UI already reflects this data,
-            // so just refresh the silent cache without disturbing whatever field
-            // the admin is currently typing into.
-            if (hasLoadedFromCloud && data.lastWriteId && data.lastWriteId === lastSentWriteId) {
-                activeStaffRecords = mergeExcelPfMaster(data.records);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(activeStaffRecords));
-                return;
+            if (!echo) {
+                activeStaffRecords = recordsByFY[currentFY];
+                initPfDropdown(currentName);
+                onPfEmployeeSelect();
             }
-
-            // First load, or a genuine change from another device/tab — pull it in
-            // and refresh the visible form/table.
-            const currentName = (activeStaffRecords[window._pfCurrentIdx] || {}).name;
-            activeStaffRecords = mergeExcelPfMaster(data.records);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(activeStaffRecords));
-            initPfDropdown(currentName);
-            onPfEmployeeSelect();
             hasLoadedFromCloud = true;
         },
         err => {
@@ -1009,7 +1204,7 @@ function handleAuthAction() {
         .then(() => {
             document.getElementById("authPassword").value = "";
             // Push whatever is currently loaded locally up to the cloud right away.
-            pushRecordsToCloud(activeStaffRecords);
+            pushAllToCloud();
         })
         .catch(err => {
             alert("Sign-in failed: " + err.message);
@@ -1023,13 +1218,17 @@ function handleSignOut() {
 
 <script>
 /* ===== Fetch monthly GPF deduction from Salary Portal (tfhs/salaryPortal) ===== */
-const PF_FY_MONTHS = [["April",2025],["May",2025],["June",2025],["July",2025],["August",2025],["September",2025],["October",2025],["November",2025],["December",2025],["January",2026],["February",2026],["March",2026]];
+function pfFyMonths() { const y = FY[currentFY].start; return FY_MONTH_NAMES.map((m, i) => [m, i < 9 ? y : y + 1]); }
 const salaryPortalRef = db.doc("tfhs/salaryPortal");
 
-(function initGpfMonthSelect(){
+function initGpfMonthSelect(){
     const sel = document.getElementById('gpfFetchMonth');
-    sel.innerHTML = PF_FY_MONTHS.map(([m,y],i)=>`<option value="${i}">${m} ${y}</option>`).join('');
-})();
+    if (!sel) return;
+    const keep = sel.value;
+    sel.innerHTML = pfFyMonths().map(([m,y],i)=>`<option value="${i}">${m} ${y}</option>`).join('');
+    if (keep) sel.value = keep;
+}
+initGpfMonthSelect();
 
 function _normName(n){ return String(n||'').replace(/\s*;.*$/,'').replace(/\s+/g,' ').trim().toUpperCase(); }
 
@@ -1055,8 +1254,8 @@ async function fetchGpfFromSalary(mode){
         const rowOf = i => i + offset;                                          // PF table row for salary month i
         const srcKey = r => {                                                   // salary month feeding PF row r
             const i = r - offset;
-            if (i >= 0) return `${PF_FY_MONTHS[i][0]}-${PF_FY_MONTHS[i][1]}`;
-            return 'March-2025';
+            if (i >= 0) return `${pfFyMonths()[i][0]}-${pfFyMonths()[i][1]}`;
+            return 'March-' + FY[currentFY].start;
         };
         const key = target === 'within' ? 'monthlyDepWithin' : 'monthlyDepAfter';
         const setVal = (rec, row, v) => {
@@ -1068,7 +1267,7 @@ async function fetchGpfFromSalary(mode){
         let filled = 0; const noData = [], noEmp = [], lines = [];
 
         let rows = [];   // PF rows to fill
-        if (mode === 'emp-all') rows = PF_FY_MONTHS.map((_,r)=>r);
+        if (mode === 'emp-all') rows = pfFyMonths().map((_,r)=>r);
         else { const r = rowOf(selIdx); if (r > 11) { out.style.color='#b45309'; out.textContent='⚠ That salary month falls in the next financial year row.'; return; } rows = [r]; }
 
         const targets = mode === 'all-month' ? activeStaffRecords : [activeStaffRecords[curIdx]];
@@ -1082,7 +1281,7 @@ async function fetchGpfFromSalary(mode){
                 if (!row) { noEmp.push(_normName(rec.name)+' ('+k+')'); return; }
                 const v = Number(row.gpf) || 0;
                 setVal(rec, r, v); filled++;
-                if (mode !== 'all-month') lines.push(`${PF_FY_MONTHS[r][0].slice(0,3)} ${PF_FY_MONTHS[r][1]} ← ${k}: ₹${v.toLocaleString('en-IN')}`);
+                if (mode !== 'all-month') lines.push(`${pfFyMonths()[r][0].slice(0,3)} ${pfFyMonths()[r][1]} ← ${k}: ₹${v.toLocaleString('en-IN')}`);
             });
         });
 
