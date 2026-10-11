@@ -317,6 +317,25 @@
                 <input type="file" id="pfJsonImport" accept="application/json,.json" style="display:none;" onchange="importAllPfJson(event)">
             </div>
         </div>
+        <div id="gpfFetchPanel" class="grid-inputs" style="background:#eff6ff;padding:12px;border-radius:6px;border:1px solid #93c5fd;margin-bottom:15px;">
+            <div class="form-group">
+                <label>PF (GPF) deduction month — from Salary Portal</label>
+                <select id="gpfFetchMonth"></select>
+            </div>
+            <div class="form-group">
+                <label>Put into column</label>
+                <select id="gpfFetchTarget">
+                    <option value="after">Deposited after 15th</option>
+                    <option value="within">Deposited within 15th</option>
+                </select>
+            </div>
+            <div class="form-group" style="display:flex;align-items:end;gap:6px;flex-wrap:wrap;">
+                <button type="button" class="btn-add" style="background:#0369a1;" onclick="fetchGpfFromSalary('emp-month')">⬇ This Emp · This Month</button>
+                <button type="button" class="btn-add" style="background:#0369a1;" onclick="fetchGpfFromSalary('emp-all')">⬇ This Emp · All Months</button>
+                <button type="button" class="btn-add" style="background:#1e3a8a;" onclick="fetchGpfFromSalary('all-month')">⬇ All Emp · This Month</button>
+            </div>
+            <div id="gpfFetchResult" style="grid-column:1/-1;font-size:.8rem;font-weight:700;color:#075985;"></div>
+        </div>
         <div id="pfSaveStatus" style="font-size:.8rem;font-weight:700;color:#065f46;margin-bottom:10px;"></div>
 
         <div class="grid-inputs">
@@ -992,6 +1011,92 @@ function handleAuthAction() {
 
 function handleSignOut() {
     auth.signOut();
+}
+</script>
+
+<script>
+/* ===== Fetch monthly GPF deduction from Salary Portal (tfhs/salaryPortal) ===== */
+const PF_FY_MONTHS = [["April",2025],["May",2025],["June",2025],["July",2025],["August",2025],["September",2025],["October",2025],["November",2025],["December",2025],["January",2026],["February",2026],["March",2026]];
+const salaryPortalRef = db.doc("tfhs/salaryPortal");
+
+(function initGpfMonthSelect(){
+    const sel = document.getElementById('gpfFetchMonth');
+    sel.innerHTML = PF_FY_MONTHS.map(([m,y],i)=>`<option value="${i}">${m} ${y}</option>`).join('');
+})();
+
+function _normName(n){ return String(n||'').replace(/\s*;.*$/,'').replace(/\s+/g,' ').trim().toUpperCase(); }
+
+function _findSalaryRow(rows, emp){
+    if (!Array.isArray(rows)) return null;
+    const code = String(emp.iosms||'').trim().toUpperCase();
+    let r = code ? rows.find(x => String(x.emp_code||'').trim().toUpperCase() === code) : null;
+    if (!r) { const nm=_normName(emp.name); r = rows.find(x => _normName(x.name) === nm); }
+    return r || null;
+}
+
+async function fetchGpfFromSalary(mode){
+    const out = document.getElementById('gpfFetchResult');
+    out.style.color = '#075985';
+    out.textContent = 'Fetching from Salary Portal…';
+    try {
+        const snap = await salaryPortalRef.get();
+        if (!snap.exists) { out.style.color='#b91c1c'; out.textContent='⚠ Salary Portal document not found.'; return; }
+        const months = (snap.data() || {}).months || {};
+        const target = document.getElementById('gpfFetchTarget').value;   // 'after' | 'within'
+        const monthIdx = Number(document.getElementById('gpfFetchMonth').value);
+        const curIdx = window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value);
+
+        const setVal = (rec, i, v) => {
+            const key = target === 'within' ? 'monthlyDepWithin' : 'monthlyDepAfter';
+            if (!Array.isArray(rec[key]) || rec[key].length !== 12) rec[key] = Array(12).fill(0);
+            rec[key][i] = v;
+        };
+
+        let filled = 0, missingMonths = [], missingEmp = [];
+
+        if (mode === 'all-month') {
+            persistCurrentPfRecord(false);
+            const [m,y] = PF_FY_MONTHS[monthIdx];
+            const rows = months[`${m}-${y}`];
+            if (!rows) { out.style.color='#b91c1c'; out.textContent=`⚠ No salary data saved for ${m} ${y}.`; return; }
+            activeStaffRecords.forEach(rec => {
+                const r = _findSalaryRow(rows, rec);
+                if (r) { setVal(rec, monthIdx, Number(r.gpf)||0); filled++; } else missingEmp.push(_normName(rec.name));
+            });
+            saveRecordsToStorage(activeStaffRecords);
+            onPfEmployeeSelect();
+            out.textContent = `✓ ${m} ${y}: GPF filled for ${filled} staff.` + (missingEmp.length ? ` Not in salary roll: ${missingEmp.join(', ')}.` : '');
+            return;
+        }
+
+        // single employee (this month or all months)
+        persistCurrentPfRecord(false);
+        const rec = activeStaffRecords[curIdx];
+        if (!rec) { out.style.color='#b91c1c'; out.textContent='⚠ Select a staff member first.'; return; }
+        const idxs = mode === 'emp-all' ? PF_FY_MONTHS.map((_,i)=>i) : [monthIdx];
+        const lines = [];
+        idxs.forEach(i => {
+            const [m,y] = PF_FY_MONTHS[i];
+            const rows = months[`${m}-${y}`];
+            if (!rows) { missingMonths.push(`${m.slice(0,3)} ${y}`); return; }
+            const r = _findSalaryRow(rows, rec);
+            if (!r) { missingEmp.push(`${m.slice(0,3)} ${y}`); return; }
+            const v = Number(r.gpf)||0;
+            setVal(rec, i, v); filled++;
+            lines.push(`${m.slice(0,3)} ${y}: ₹${v.toLocaleString('en-IN')}`);
+        });
+        saveRecordsToStorage(activeStaffRecords);
+        onPfEmployeeSelect();
+        let msg = filled ? `✓ ${_normName(rec.name)} — ${lines.join(' | ')}` : `⚠ No GPF found for ${_normName(rec.name)}.`;
+        if (missingMonths.length) msg += ` | No salary data for: ${missingMonths.join(', ')}`;
+        if (missingEmp.length) msg += ` | Not in roll: ${missingEmp.join(', ')}`;
+        if (!filled) out.style.color='#b45309';
+        out.textContent = msg;
+    } catch (err) {
+        console.error(err);
+        out.style.color='#b91c1c';
+        out.textContent = '⚠ Fetch failed: ' + (err.message || err);
+    }
 }
 </script>
 </body>
