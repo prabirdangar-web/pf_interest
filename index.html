@@ -1184,6 +1184,14 @@ async function fetchGpfFromSalary(mode){
             if (!Array.isArray(rec[key]) || rec[key].length !== 12) rec[key] = Array(12).fill(0);
             rec[key][row] = v;
         };
+        // Clear previous data of the month being fetched (both columns) so old/wrong values never linger.
+        // Months with no salary data in the portal are left untouched.
+        const clearRow = (rec, row) => {
+            ['monthlyDepWithin','monthlyDepAfter'].forEach(k => {
+                if (!Array.isArray(rec[k]) || rec[k].length !== 12) rec[k] = Array(12).fill(0);
+                rec[k][row] = 0;
+            });
+        };
         const curIdx = window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value);
         persistCurrentPfRecord(false);   // flush what's on screen first
         let filled = 0; const noData = [], noEmp = [], lines = [];
@@ -1202,6 +1210,7 @@ async function fetchGpfFromSalary(mode){
                 const row = _findSalaryRow(data, rec);
                 if (!row) { noEmp.push(_normName(rec.name)+' ('+k+')'); return; }
                 const v = Number(row.gpf) || 0;
+                clearRow(rec, r);          // wipe old data of this month (both columns) before loading fresh
                 setVal(rec, r, v); filled++;
                 if (mode !== 'all-month') lines.push(`${pfFyMonths()[r][0].slice(0,3)} ${pfFyMonths()[r][1]} ← ${k}: ₹${v.toLocaleString('en-IN')}`);
             });
