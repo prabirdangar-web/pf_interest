@@ -175,9 +175,76 @@
             #ledgerPrint { display: block !important; }
             * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
+
+        /* ===== Staff self-service PF ledger (opened with ?staff=1 or #staff) ===== */
+        #staffPf { display: none; min-height: 100vh; background: var(--light-bg); padding: 14px; }
+        .staff-mode .app { display: none !important; }
+        .staff-mode #staffPf { display: block; }
+        .sv-gate { max-width: 440px; margin: 28px auto; background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,.12); border-top: 4px solid #1e3a8a; }
+        .sv-gate h2 { margin: 0 0 4px; color: #1e3a8a; font-size: 18px; }
+        .sv-gate .sub { font-size: 12px; color: #64748b; margin: 0 0 14px; }
+        .sv-gate label { display: block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: #64748b; margin: 10px 0 4px; }
+        .sv-gate select, .sv-gate input { width: 100%; padding: 8px; font-size: 13px; margin-bottom: 4px; }
+        .sv-gate button.go { width: 100%; margin-top: 14px; padding: 10px; font-size: 13px; background: #1e3a8a; color: #fff; border: 0; border-radius: 5px; font-weight: 700; cursor: pointer; }
+        #svErr { color: #b91c1c; font-size: 12px; min-height: 16px; margin-top: 10px; }
+        .sv-top { max-width: 1100px; margin: 0 auto 10px; background: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .sv-top .who { flex: 1; min-width: 220px; }
+        .sv-top .who b { font-size: 15px; color: #1e3a8a; }
+        .sv-top .who div { font-size: 12px; color: #475569; margin-top: 2px; }
+        .sv-btn { padding: 7px 14px; font-size: 12.5px; border: 0; border-radius: 5px; cursor: pointer; font-weight: 600; color: #fff; background: #1e3a8a; }
+        .sv-btn.green { background: #059669; } .sv-btn.grey { background: #64748b; }
+        .sv-card { max-width: 1100px; margin: 0 auto 10px; background: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; }
+        .sv-card h3 { margin: 0 0 8px; font-size: 13.5px; color: #1e3a8a; }
+        .sv-sum { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        .sv-sum th { background: #1e293b; color: #fff; padding: 6px; font-weight: 600; }
+        .sv-sum td { border: 1px solid var(--border-color); padding: 6px; text-align: right; }
+        .sv-sum td:first-child { text-align: center; font-weight: 700; }
+        .sv-sum tr.cur td { background: #fffbeb; }
+        .sv-tabs { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+        .sv-tabs button { padding: 7px 16px; border: 1px solid #1e3a8a; background: #fff; color: #1e3a8a; border-radius: 5px; font-weight: 700; cursor: pointer; font-size: 12.5px; }
+        .sv-tabs button.active { background: #1e3a8a; color: #fff; }
+        #svLedger { overflow-x: auto; }
+        #svLedger .lp { height: auto !important; min-width: 980px; padding: 4px 2px 8px; page-break-after: auto; }
+        .sv-note { font-size: 11px; color: #64748b; margin-top: 8px; }
 </style>
 </head>
 <body>
+
+<!-- ===== STAFF SELF-SERVICE: own PF ledger, year-wise (shown only in staff mode) ===== -->
+<div id="staffPf">
+  <div id="svGate" class="sv-gate">
+    <h2>📘 My PF Ledger</h2>
+    <p class="sub">Taldangra Fulmati High School [H.S.] — enter any two of your identity details to view your own PF ledger, year-wise.</p>
+    <label>Identity Detail 1</label>
+    <select id="svF1" onchange="svFactorChanged()">
+      <option value="code" selected>Employee Code</option><option value="pan">PAN Number</option>
+      <option value="dob">Date of Birth</option><option value="mob">Mobile Number</option><option value="ngipf">NGIPF A/C No.</option>
+    </select>
+    <input id="svV1" autocomplete="off" onkeydown="if(event.key==='Enter')svVerify();">
+    <label>Identity Detail 2</label>
+    <select id="svF2" onchange="svFactorChanged()">
+      <option value="code">Employee Code</option><option value="pan" selected>PAN Number</option>
+      <option value="dob">Date of Birth</option><option value="mob">Mobile Number</option><option value="ngipf">NGIPF A/C No.</option>
+    </select>
+    <input id="svV2" autocomplete="off" onkeydown="if(event.key==='Enter')svVerify();">
+    <button type="button" class="go" onclick="svVerify()">View My PF Ledger</button>
+    <div id="svErr"></div>
+  </div>
+  <div id="svView" style="display:none;">
+    <div class="sv-top">
+      <div class="who"><b id="svName"></b><div id="svMeta"></div></div>
+      <button type="button" class="sv-btn green" onclick="svPrint(false)">🖨 Print This Year</button>
+      <button type="button" class="sv-btn" onclick="svPrint(true)">🖨 Print All Years</button>
+      <button type="button" class="sv-btn grey" onclick="svLogout()">🚪 Exit</button>
+    </div>
+    <div class="sv-card"><h3>Year-wise summary</h3><div style="overflow-x:auto;"><table class="sv-sum" id="svSum"></table></div></div>
+    <div class="sv-card">
+      <div class="sv-tabs" id="svTabs"></div>
+      <div id="svLedger"></div>
+      <div class="sv-note">Entries are updated month by month. For the running year, later months may show scheduled / default deposits and the closing balance is provisional until confirmed by the school.</div>
+    </div>
+  </div>
+</div>
 
 <div class="app">
 
@@ -211,6 +278,7 @@
 
         <div class="topbar">
             <h1>Unified ROPA &amp; PF Management Dashboard</h1>
+            <a href="?staff=1" target="_blank" class="btn-tiny" style="text-decoration:none;" title="Open the staff self-service view (share this link with staff)">👤 Staff View</a>
             <div class="auth-bar" id="authBar">
                 <span id="authStatus" class="auth-status signed-out">Checking sign-in status…</span>
                 <input type="email" id="authEmail" placeholder="Admin email" style="display:none;">
@@ -1082,6 +1150,7 @@ function initFirebaseSync() {
                 onPfEmployeeSelect();
             }
             hasLoadedFromCloud = true;
+            if (window.staffRefresh) staffRefresh();
         },
         err => {
             console.error("Firestore sync error:", err);
@@ -1393,6 +1462,113 @@ function bulkPrint() {
 // Old button names kept so nothing else breaks
 function printPfStatement() { printLedger(); }
 function printPFStatement() { printLedger(); }
+</script>
+<script>
+/* ===== Staff self-service PF ledger (two-factor, year-wise) ===== */
+(function () {
+  if (/[?&#]staff/.test(location.search + location.hash)) document.documentElement.classList.add('staff-mode');
+  const LOCK_KEY = 'TFHS_PF_SV_LOCK';
+  const FACT = { code:{t:'text',p:'e.g. JVMK0539'}, pan:{t:'text',p:'e.g. AHGPD9070Q'}, dob:{t:'date',p:''}, mob:{t:'tel',p:'10-digit mobile number'}, ngipf:{t:'text',p:'e.g. ESS199702748'} };
+  let salaryMap = null, key = null, curFY = null;
+  const $ = id => document.getElementById(id);
+  const norm = (f, v) => { v = (v == null ? '' : String(v)).trim(); if (f === 'dob') return v; if (f === 'mob') return v.replace(/\D/g, '').slice(-10); return v.replace(/\s+/g, '').toUpperCase(); };
+  const getLock = () => { try { return JSON.parse(localStorage.getItem(LOCK_KEY)) || { n: 0, until: 0 }; } catch (e) { return { n: 0, until: 0 }; } };
+  const setLock = o => { try { localStorage.setItem(LOCK_KEY, JSON.stringify(o)); } catch (e) {} };
+
+  window.svFactorChanged = function () {
+    [['svF1', 'svV1'], ['svF2', 'svV2']].forEach(([s, i]) => {
+      const f = $(s).value, el = $(i);
+      if (el.dataset.f !== f) { el.dataset.f = f; el.type = FACT[f].t; el.placeholder = FACT[f].p; el.value = ''; }
+    });
+  };
+  document.addEventListener('DOMContentLoaded', svFactorChanged);
+
+  async function loadSalary() {
+    if (salaryMap) return salaryMap;
+    const map = new Map();
+    try {
+      const snap = await salaryPortalRef.get();
+      const months = (snap.data() || {}).months || {};
+      const NM = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      const idx = k => { const p = k.split('-'); return parseInt(p[1], 10) * 12 + NM.indexOf(p[0]); };
+      Object.keys(months).sort((a, b) => idx(a) - idx(b)).forEach(k => (months[k] || []).forEach(e => { if (e.emp_code) map.set(String(e.emp_code).trim().toUpperCase(), e); }));
+    } catch (e) { console.warn('Salary data unavailable for identity check:', e); }
+    salaryMap = map; return map;
+  }
+  function candidates() {
+    const seen = new Map();
+    [2026, 2025].forEach(fy => (recordsByFY[fy] || []).forEach(r => { const k = _pfKey(r.name); if (!seen.has(k)) seen.set(k, r); }));
+    return seen;
+  }
+  function fval(rec, sal, f) {
+    if (f === 'code') return norm(f, rec.iosms);
+    if (f === 'ngipf') return norm(f, rec.ngipf);
+    if (f === 'dob') return norm(f, rec.dob || (sal && sal.dob));
+    if (f === 'pan') return norm(f, sal && sal.pan);
+    if (f === 'mob') return norm(f, sal && sal.mob_no);
+    return '';
+  }
+
+  window.svVerify = async function () {
+    const err = $('svErr'); err.textContent = '';
+    let lock = getLock();
+    if (lock.until > Date.now()) { err.textContent = 'Too many wrong attempts. Please try again after ' + Math.ceil((lock.until - Date.now()) / 60000) + ' minute(s).'; return; }
+    const f1 = $('svF1').value, f2 = $('svF2').value;
+    if (f1 === f2) { err.textContent = 'Please choose two different identity details.'; return; }
+    const v1 = norm(f1, $('svV1').value), v2 = norm(f2, $('svV2').value);
+    if (!v1 || !v2) { err.textContent = 'Please fill in both details.'; return; }
+    const cands = candidates();
+    if (!cands.size) { err.textContent = 'PF data is still loading. Please wait a moment and try again.'; return; }
+    const sal = await loadSalary();
+    let found = null;
+    cands.forEach((rec, k) => {
+      if (found) return;
+      const s = sal.get(String(rec.iosms || '').trim().toUpperCase());
+      const a = fval(rec, s, f1), b = fval(rec, s, f2);
+      if (a && b && a === v1 && b === v2) found = k;
+    });
+    if (!found) {
+      lock.n = (lock.n || 0) + 1;
+      if (lock.n >= 5) lock = { n: 0, until: Date.now() + 5 * 60000 };
+      setLock(lock);
+      err.textContent = 'The details did not match our records. Please check and try again.';
+      return;
+    }
+    setLock({ n: 0, until: 0 });
+    key = found; $('svV1').value = ''; $('svV2').value = '';
+    curFY = null; show();
+  };
+
+  window.svLogout = function () { key = null; $('svView').style.display = 'none'; $('svGate').style.display = ''; };
+  window.svSelectFY = function (fy) { curFY = fy; show(); };
+  window.staffRefresh = function () { if (key) show(); };
+
+  const recFor = fy => (recordsByFY[fy] || []).find(r => _pfKey(r.name) === key);
+  const money = v => Math.round(v).toLocaleString('en-IN');
+
+  function show() {
+    const years = [2025, 2026].filter(fy => recFor(fy));
+    if (!years.length) { svLogout(); return; }
+    if (!curFY || !years.includes(curFY)) curFY = years[years.length - 1];
+    $('svGate').style.display = 'none'; $('svView').style.display = '';
+    const latest = recFor(years[years.length - 1]);
+    const nm = String(latest.name || '').replace(/\s*;.*$/, '').replace(/\s+/g, ' ').trim().toUpperCase();
+    $('svName').textContent = nm;
+    $('svMeta').textContent = fullDesig(latest.designation || deriveDesignation(latest.name)) + ' · NGIPF A/C: ' + (latest.ngipf || 'N.A.') + ' · Employee Code: ' + (latest.iosms || 'N.A.');
+    $('svSum').innerHTML = '<thead><tr><th>Financial Year</th><th>Opening Balance (₹)</th><th>Total Deposit (₹)</th><th>Interest (₹)</th><th>Withdrawals (₹)</th><th>Closing Balance (₹)</th></tr></thead><tbody>' +
+      years.map(fy => { const s = simulateFY(recFor(fy), FY[fy].start); return `<tr class="${fy === curFY ? 'cur' : ''}"><td>${FY[fy].label}</td><td>${money(s.ob)}</td><td>${money(s.dep)}</td><td>${money(s.interest)}</td><td>${money(s.wd)}</td><td><b>${money(s.cb)}</b></td></tr>`; }).join('') + '</tbody>';
+    $('svTabs').innerHTML = years.map(fy => `<button type="button" class="${fy === curFY ? 'active' : ''}" onclick="svSelectFY(${fy})">FY ${FY[fy].label}</button>`).join('');
+    $('svLedger').innerHTML = ledgerPageHTML(recFor(curFY), curFY);
+  }
+
+  window.svPrint = function (all) {
+    if (!key) return;
+    const years = [2025, 2026].filter(fy => recFor(fy));
+    const list = all ? years : [curFY];
+    const nm = String(recFor(list[0]).name || '').replace(/\s*;.*$/, '').trim();
+    printPages(list.map(fy => ledgerPageHTML(recFor(fy), fy)).join(''), 'PF Ledger - ' + nm);
+  };
+})();
 </script>
 </body>
 </html>
