@@ -312,6 +312,8 @@
                 <div class="fg"><label>Joining in this School</label><input type="date" id="schoolJoining" value=""></div>
                 <div class="fg"><label>IOSMS ID</label><input type="text" id="iosmsId" readonly></div>
                 <div class="fg"><label>NGIPF A/C No.</label><input type="text" id="ngipfAc" readonly></div>
+                <div class="fg"><label>PAN (from Salary Portal)</label><input type="text" id="salPan" readonly placeholder="not fetched yet"></div>
+                <div class="fg"><label>Mobile (from Salary Portal)</label><input type="text" id="salMob" readonly placeholder="not fetched yet"></div>
                 <div class="fg"><label>Headmaster (ledger signatory)</label><input type="text" id="hmName" value="PRABIR KUMAR DANGAR"></div>
             </div>
         </details>
@@ -338,6 +340,8 @@
                     <button type="button" class="btn-add" style="background:#0369a1;" onclick="fetchGpfFromSalary('emp-month')">⬇ This Emp · This Month</button>
                     <button type="button" class="btn-add" style="background:#0369a1;" onclick="fetchGpfFromSalary('emp-all')">⬇ This Emp · All Months</button>
                     <button type="button" class="btn-add" style="background:#1e3a8a;" onclick="fetchGpfFromSalary('all-month')">⬇ All Emp · This Month</button>
+                    <button type="button" class="btn-add" style="background:#1e3a8a;" onclick="fetchGpfFromSalary('all-all')">⬇ All Emp · All Months</button>
+                    <button type="button" class="btn-add" style="background:#047857;" onclick="fetchProfileFromSalary()" title="Store PAN / Mobile / DOB of every employee from Salary Portal into PF records (used by Staff View)">👤 Fetch Profile · All Emp</button>
                 </div>
                 <div id="gpfFetchResult" style="grid-column:1/-1;font-size:.8rem;font-weight:700;color:#075985;"></div>
             </div>
@@ -529,6 +533,7 @@ let monthlyDepAfterCache = Array(12).fill(30000);
 let monthlyWdCache = Array(12).fill(0);
 let monthlyRoiCache = Array(12).fill(7.1);
 let intOverrideCache = null;
+let salNoteCache = Array(12).fill('');   // per-month note from Salary Portal fetch: '' | 'nogen:<col>' | 'noemp:<col>'
 
 function getSavedRecords(fy = currentFY) {
     try {
@@ -675,7 +680,7 @@ function buildFromPrevYear(prev) {
         const dep = r.defaultDepAfter !== undefined ? r.defaultDepAfter : 0;
         return { ...r, ob: cb, prevCB2526: cb, defaultDepAfter: dep, roi, interestOverride: null,
                  monthlyDepWithin: Array(12).fill(0), monthlyDepAfter: Array(12).fill(dep),
-                 monthlyWd: Array(12).fill(0), monthlyRoi: Array(12).fill(roi) };
+                 monthlyWd: Array(12).fill(0), monthlyRoi: Array(12).fill(roi), salNote: Array(12).fill('') };
     });
 }
 
@@ -826,6 +831,9 @@ function onPfEmployeeSelect() {
         document.getElementById('schoolJoining').value = emp.schoolJoining || '';
         document.getElementById('iosmsId').value = emp.iosms || '';
         document.getElementById('ngipfAc').value = emp.ngipf || '';
+        document.getElementById('salPan').value = emp.pan || '';
+        document.getElementById('salMob').value = emp.mob || '';
+        salNoteCache = Array.isArray(emp.salNote) && emp.salNote.length === 12 ? [...emp.salNote] : Array(12).fill('');
         monthlyDepWithinCache = Array.isArray(emp.monthlyDepWithin) && emp.monthlyDepWithin.length === 12 ? [...emp.monthlyDepWithin] : Array(12).fill(0);
         monthlyDepAfterCache = Array.isArray(emp.monthlyDepAfter) && emp.monthlyDepAfter.length === 12 ? [...emp.monthlyDepAfter] : Array(12).fill(defaultAfter);
         monthlyWdCache = Array.isArray(emp.monthlyWd) && emp.monthlyWd.length === 12 ? [...emp.monthlyWd] : Array(12).fill(0);
@@ -872,10 +880,10 @@ function updateStaffHeader() {
 
 function applyDefaultMonthlyToAll() {
     const defDep = parseFloat(document.getElementById('pfDefaultMonthlyDep').value) || 0;
-    monthlyDepAfterCache = Array(12).fill(defDep);
+    monthlyDepAfterCache = Array.from({ length: 12 }, (_, i) => salNoteCache[i] ? 0 : defDep);   // keep fetched/flagged months at 0
     for (let i = 0; i < 12; i++) {
         const input = document.getElementById(`dep_after_${i}`);
-        if (input) input.value = defDep;
+        if (input) input.value = monthlyDepAfterCache[i];
     }
     calculatePF2025_26();
 }
@@ -884,6 +892,7 @@ function updateMonthlyVal(monthIdx, type, val) {
     const num = parseFloat(val) || 0;
     if (type === 'within') monthlyDepWithinCache[monthIdx] = num;
     if (type === 'after') monthlyDepAfterCache[monthIdx] = num;
+    if ((type === 'within' || type === 'after') && num > 0) salNoteCache[monthIdx] = '';
     if (type === 'wd') monthlyWdCache[monthIdx] = num;
     if (type === 'roi') monthlyRoiCache[monthIdx] = num;
     calculatePF2025_26();
@@ -923,13 +932,18 @@ function renderPfTableInputs() {
             (m.credit ? tag(`INTEREST ₹ ${fmt(m.credit)} CREDITED ON CLOSURE`, '#047857') : '') +
             (m.negative ? tag(`⚠ EXCESS WITHDRAWAL ₹ ${fmt(-m.close)}`, '#dc2626') : '');
         const closeStyle = m.negative ? 'color:#dc2626;' : '';
+        const [noteT, noteCol] = String(salNoteCache[i] || '').split(':');
+        const noteTxt = noteT === 'nogen' ? 'Salary not generated' : noteT === 'noemp' ? 'Not in salary roll' : '';
+        const depInput = (col, val) => (noteTxt && noteCol === col && !val)
+            ? `<input type="number" id="dep_${col}_${i}" value="" placeholder="${noteTxt}" title="${noteTxt}" style="width:128px;text-align:center;background:#fffbeb;border:1px solid #f59e0b;color:#b45309;font-size:.68rem;font-weight:700;" oninput="updateMonthlyVal(${i}, '${col}', this.value)">`
+            : `<input type="number" id="dep_${col}_${i}" value="${val}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, '${col}', this.value)">`;
         tbodyHtml += `
             <tr${m.negative ? ' style="background:#fee2e2;"' : ''}>
                 <td><strong>${monthNames[i]}</strong>${labels}</td>
                 <td>₹ ${fmt(m.op)}</td>
                 <td><input type="number" id="roi_${i}" value="${m.roi.toFixed(2)}" step="0.01" min="0" style="width:72px;text-align:center;" oninput="updateMonthlyVal(${i}, 'roi', this.value)"></td>
-                <td><input type="number" id="dep_within_${i}" value="${m.w}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'within', this.value)"></td>
-                <td><input type="number" id="dep_after_${i}" value="${m.a}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'after', this.value)"></td>
+                <td>${depInput('within', m.w)}</td>
+                <td>${depInput('after', m.a)}</td>
                 <td><input type="number" id="wd_${i}" value="${m.wd}" style="width:85px;text-align:center;" oninput="updateMonthlyVal(${i}, 'wd', this.value)"></td>
                 <td>₹ ${fmt(m.lowest)}</td>
                 <td>₹ ${m.interest.toFixed(2)}</td>
@@ -1005,6 +1019,7 @@ function persistCurrentPfRecord(showStatus = false) {
         monthlyDepAfter: [...monthlyDepAfterCache],
         monthlyWd: [...monthlyWdCache],
         monthlyRoi: [...monthlyRoiCache],
+        salNote: [...salNoteCache],
         interestOverride: intOverrideCache
     };
     saveRecordsToStorage(activeStaffRecords);
@@ -1231,6 +1246,62 @@ function _findSalaryRow(rows, emp){
     return r || null;
 }
 
+const _SAL_NM = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function _salMonthIdx(k){ const p = String(k).split('-'); return parseInt(p[1],10) * 12 + _SAL_NM.indexOf(p[0]); }
+
+/* Copy PAN / Mobile / DOB of one employee from the newest salary month that lists them, into that
+   employee's PF record of EVERY financial year (Staff View reads them from there). Returns FYs touched. */
+function _storeProfile(months, rec){
+    const keys = Object.keys(months).sort((a,b) => _salMonthIdx(b) - _salMonthIdx(a));
+    let row = null;
+    for (const k of keys) { row = _findSalaryRow(months[k], rec); if (row) break; }
+    if (!row) return null;
+    const pan = String(row.pan || '').trim().toUpperCase();
+    const mob = String(row.mob_no || '').replace(/\D/g,'').slice(-10);
+    const dob = String(row.dob || '').trim();
+    const touched = new Set();
+    [2025, 2026].forEach(fy => {
+        const o = (recordsByFY[fy] || []).find(x => _pfKey(x.name) === _pfKey(rec.name));
+        if (!o) return;
+        if (pan) o.pan = pan;
+        if (mob) o.mob = mob;
+        if (dob && !o.dob) o.dob = dob;
+        o.profileFetchedAt = new Date().toISOString();
+        touched.add(fy);
+    });
+    return { pan, mob, touched };
+}
+
+async function fetchProfileFromSalary(){
+    const out = document.getElementById('gpfFetchResult');
+    out.style.color = '#075985';
+    out.textContent = 'Fetching staff profile from Salary Portal…';
+    try {
+        const snap = await salaryPortalRef.get();
+        if (!snap.exists) { out.style.color='#b91c1c'; out.textContent='⚠ Salary Portal document not found.'; return; }
+        const months = (snap.data() || {}).months || {};
+        persistCurrentPfRecord(false);
+        const touched = new Set(); const missing = []; let ok = 0;
+        activeStaffRecords.forEach(rec => {
+            const r = _storeProfile(months, rec);
+            if (!r) { missing.push(_normName(rec.name)); return; }
+            r.touched.forEach(fy => touched.add(fy)); ok++;
+            if (!r.pan || !r.mob) missing.push(_normName(rec.name) + (r.pan ? ' (no mobile)' : r.mob ? ' (no PAN)' : ' (no PAN/mobile)'));
+        });
+        touched.forEach(fy => saveRecordsToStorage(recordsByFY[fy], true, fy));
+        const cur = activeStaffRecords[window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value)];
+        if (cur) { document.getElementById('salPan').value = cur.pan || ''; document.getElementById('salMob').value = cur.mob || ''; document.getElementById('dob').value = cur.dob || ''; }
+        let msg = `✓ Profile stored for ${ok} staff (PAN / Mobile / DOB) — Staff View can now verify from PF data.`;
+        if (missing.length) msg += ` Incomplete or not found: ${missing.slice(0,8).join(', ')}${missing.length>8?'…':''}.`;
+        if (missing.length) out.style.color = '#b45309';
+        out.textContent = msg;
+    } catch (err) {
+        console.error(err);
+        out.style.color='#b91c1c';
+        out.textContent = '⚠ Profile fetch failed: ' + (err.message || err);
+    }
+}
+
 async function fetchGpfFromSalary(mode){
     const out = document.getElementById('gpfFetchResult');
     out.style.color = '#075985';
@@ -1240,6 +1311,7 @@ async function fetchGpfFromSalary(mode){
         if (!snap.exists) { out.style.color='#b91c1c'; out.textContent='⚠ Salary Portal document not found.'; return; }
         const months = (snap.data() || {}).months || {};
         const target = document.getElementById('gpfFetchTarget').value;
+        const col = target === 'within' ? 'within' : 'after';
         const offset = Number(document.getElementById('gpfFetchOffset').value) || 0;
         const selIdx = Number(document.getElementById('gpfFetchMonth').value);   // salary month chosen
         const rowOf = i => i + offset;                                          // PF table row for salary month i
@@ -1248,56 +1320,63 @@ async function fetchGpfFromSalary(mode){
             if (i >= 0) return `${pfFyMonths()[i][0]}-${pfFyMonths()[i][1]}`;
             return 'March-' + FY[currentFY].start;
         };
-        const key = target === 'within' ? 'monthlyDepWithin' : 'monthlyDepAfter';
-        const setVal = (rec, row, v) => {
-            if (!Array.isArray(rec[key]) || rec[key].length !== 12) rec[key] = Array(12).fill(0);
-            rec[key][row] = v;
-        };
-        // Clear previous data of the month being fetched (both columns) so old/wrong values never linger.
-        // Months with no salary data in the portal are left untouched.
-        const clearRow = (rec, row) => {
-            ['monthlyDepWithin','monthlyDepAfter'].forEach(k => {
-                if (!Array.isArray(rec[k]) || rec[k].length !== 12) rec[k] = Array(12).fill(0);
-                rec[k][row] = 0;
-            });
-        };
+        const key = col === 'within' ? 'monthlyDepWithin' : 'monthlyDepAfter';
+        const ensure = (rec, k) => { if (!Array.isArray(rec[k]) || rec[k].length !== 12) rec[k] = Array(12).fill(k === 'salNote' ? '' : 0); };
+        // A fetched month always replaces whatever was there (incl. the default amount) in BOTH columns.
+        const clearRow = (rec, row) => { ['monthlyDepWithin','monthlyDepAfter'].forEach(k => { ensure(rec, k); rec[k][row] = 0; }); };
+
         const curIdx = window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value);
         persistCurrentPfRecord(false);   // flush what's on screen first
-        let filled = 0; const noData = [], noEmp = [], lines = [];
 
         let rows = [];   // PF rows to fill
-        if (mode === 'emp-all') rows = pfFyMonths().map((_,r)=>r);
+        if (mode === 'emp-all' || mode === 'all-all') rows = pfFyMonths().map((_,r)=>r);
         else { const r = rowOf(selIdx); if (r > 11) { out.style.color='#b45309'; out.textContent='⚠ That salary month falls in the next financial year row.'; return; } rows = [r]; }
 
-        const targets = mode === 'all-month' ? activeStaffRecords : [activeStaffRecords[curIdx]];
+        const allEmp = (mode === 'all-month' || mode === 'all-all');
+        const targets = allEmp ? activeStaffRecords : [activeStaffRecords[curIdx]];
+        let filled = 0; const notGen = new Set(), noEmp = [], lines = [];
+
         rows.forEach(r => {
             const k = srcKey(r);
             const data = months[k];
-            if (!data) { noData.push(k); return; }
+            const generated = Array.isArray(data) && data.length > 0;
+            if (!generated) notGen.add(k);
             targets.forEach(rec => {
                 if (!rec) return;
+                ensure(rec, 'salNote');
+                clearRow(rec, r);                                   // no data => amount 0, default amount removed
+                if (!generated) { rec.salNote[r] = 'nogen:' + col; return; }   // salary of that month not yet generated
                 const row = _findSalaryRow(data, rec);
-                if (!row) { noEmp.push(_normName(rec.name)+' ('+k+')'); return; }
+                if (!row) { rec.salNote[r] = 'noemp:' + col; noEmp.push(_normName(rec.name) + ' (' + k + ')'); return; }
                 const v = Number(row.gpf) || 0;
-                clearRow(rec, r);          // wipe old data of this month (both columns) before loading fresh
-                setVal(rec, r, v); filled++;
-                if (mode !== 'all-month') lines.push(`${pfFyMonths()[r][0].slice(0,3)} ${pfFyMonths()[r][1]} ← ${k}: ₹${v.toLocaleString('en-IN')}`);
+                ensure(rec, key); rec[key][r] = v; rec.salNote[r] = ''; filled++;
+                if (!allEmp) lines.push(`${pfFyMonths()[r][0].slice(0,3)} ${pfFyMonths()[r][1]} ← ${k}: ₹${v.toLocaleString('en-IN')}`);
             });
         });
 
-        saveRecordsToStorage(activeStaffRecords);
+        // Store profile data (PAN / mobile / DOB) of the same staff in their PF records
+        const touched = new Set([currentFY]); let prof = 0;
+        targets.forEach(rec => { if (!rec) return; const r = _storeProfile(months, rec); if (r) { prof++; r.touched.forEach(fy => touched.add(fy)); } });
+
+        touched.forEach(fy => saveRecordsToStorage(recordsByFY[fy], true, fy));
         // Reload caches + inputs directly from the updated record (do NOT call onPfEmployeeSelect: it re-saves stale caches)
         const rec = activeStaffRecords[curIdx];
         if (rec) {
             monthlyDepWithinCache = Array.isArray(rec.monthlyDepWithin) && rec.monthlyDepWithin.length===12 ? [...rec.monthlyDepWithin] : Array(12).fill(0);
             monthlyDepAfterCache  = Array.isArray(rec.monthlyDepAfter)  && rec.monthlyDepAfter.length===12  ? [...rec.monthlyDepAfter]  : Array(12).fill(0);
+            salNoteCache = Array.isArray(rec.salNote) && rec.salNote.length===12 ? [...rec.salNote] : Array(12).fill('');
+            document.getElementById('salPan').value = rec.pan || '';
+            document.getElementById('salMob').value = rec.mob || '';
+            document.getElementById('dob').value = rec.dob || '';
         }
         calculatePF2025_26();
 
-        let msg = filled ? `✓ Filled ${filled} cell(s) in "${target === 'within' ? 'within 15th' : 'after 15th'}" column. ` + lines.join(' | ') : '⚠ Nothing filled. ';
-        if (noData.length) msg += ` No salary data saved for: ${[...new Set(noData)].join(', ')}.`;
-        if (noEmp.length) msg += ` Not in roll: ${noEmp.slice(0,8).join(', ')}${noEmp.length>8?'…':''}.`;
-        if (!filled) out.style.color = '#b45309';
+        const colTxt = col === 'within' ? 'within 15th' : 'after 15th';
+        let msg = filled ? `✓ Filled ${filled} cell(s) in "${colTxt}" column` + (allEmp ? ` for ${targets.length} staff. ` : '. ') + lines.join(' | ') : '⚠ Nothing filled. ';
+        if (notGen.size) msg += ` Salary not yet generated for: ${[...notGen].join(', ')} — amount set to 0.`;
+        if (noEmp.length) msg += ` Not in salary roll (set to 0): ${noEmp.slice(0,8).join(', ')}${noEmp.length>8?'…':''}.`;
+        if (prof) msg += ` Profile stored for ${prof} staff.`;
+        if (!filled || notGen.size) out.style.color = '#b45309';
         out.textContent = msg;
     } catch (err) {
         console.error(err);
@@ -1504,8 +1583,8 @@ function printPFStatement() { printLedger(); }
     if (f === 'code') return norm(f, rec.iosms);
     if (f === 'ngipf') return norm(f, rec.ngipf);
     if (f === 'dob') return norm(f, rec.dob || (sal && sal.dob));
-    if (f === 'pan') return norm(f, sal && sal.pan);
-    if (f === 'mob') return norm(f, sal && sal.mob_no);
+    if (f === 'pan') return norm(f, rec.pan || (sal && sal.pan));
+    if (f === 'mob') return norm(f, rec.mob || (sal && sal.mob_no));
     return '';
   }
 
