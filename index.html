@@ -556,9 +556,20 @@ function queueCloudSave(records, fy = currentFY) {
     cloudTimers[fy] = setTimeout(() => pushRecordsToCloud(records, fy), 700);
 }
 
+/* Edits made while signed out are flagged "pending" (survives reload) so they are pushed once signed in,
+   and the cloud copy never overwrites them in the meantime. */
+const PEND_KEY = fy => 'TFHS_PF_PENDING_' + fy;
+const isPending = fy => localStorage.getItem(PEND_KEY(fy)) === '1';
+const hasLocalCopy = fy => recordsByFY[fy].length > 0;
+function flushPendingToCloud() {
+    if (!currentUser) return;
+    [2025, 2026].forEach(fy => { if (isPending(fy) && recordsByFY[fy].length) pushRecordsToCloud(recordsByFY[fy], fy); });
+}
+
 function pushRecordsToCloud(records, fy = currentFY) {
     if (!currentUser) {
-        document.getElementById("syncStatus").textContent = "Not signed in — changes are saved on this device only";
+        localStorage.setItem(PEND_KEY(fy), '1');
+        document.getElementById("syncStatus").textContent = "⚠ Not signed in — " + FY[fy].label + " changes NOT in cloud yet (staff cannot see them). Sign in to upload.";
         return;
     }
     const writeId = clientSessionId + '_' + (++writeCounter);
@@ -568,7 +579,11 @@ function pushRecordsToCloud(records, fy = currentFY) {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         lastWriteId: writeId,
         updatedBy: currentUser.email
-    }, { merge: true }).catch(err => {
+    }, { merge: true }).then(() => {
+        localStorage.removeItem(PEND_KEY(fy));
+        document.getElementById("syncStatus").textContent = "✓ " + FY[fy].label + " saved to cloud — staff view updated";
+    }).catch(err => {
+        localStorage.setItem(PEND_KEY(fy), '1');
         console.error("Firestore save error:", err);
         document.getElementById("syncStatus").textContent = "⚠ Cloud save failed — check connection";
     });
@@ -584,7 +599,10 @@ function pushAllToCloud() {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         lastWriteId: writeId,
         updatedBy: currentUser.email
-    }, { merge: true }).catch(err => {
+    }, { merge: true }).then(() => {
+        localStorage.removeItem(PEND_KEY(2025)); localStorage.removeItem(PEND_KEY(2026));
+        document.getElementById("syncStatus").textContent = "✓ All years saved to cloud — staff view updated";
+    }).catch(err => {
         console.error("Firestore save error:", err);
         document.getElementById("syncStatus").textContent = "⚠ Cloud save failed — check connection";
     });
@@ -1137,6 +1155,7 @@ function initFirebaseSync() {
     auth.onAuthStateChanged(user => {
         currentUser = user;
         updateAuthUI();
+        if (user) flushPendingToCloud();
     });
 
     pfDocRef.onSnapshot(
@@ -1146,8 +1165,8 @@ function initFirebaseSync() {
             const echo = hasLoadedFromCloud && data.lastWriteId && sentWriteIds.has(data.lastWriteId);
             const currentName = (activeStaffRecords[window._pfCurrentIdx] || {}).name;
 
-            if (Array.isArray(c25)) { setRecords(2025, mergeExcelPfMaster(c25)); localStorage.setItem(FY[2025].key, JSON.stringify(recordsByFY[2025])); }
-            if (Array.isArray(c26)) {
+            if (Array.isArray(c25) && !(isPending(2025) && hasLocalCopy(2025))) { setRecords(2025, mergeExcelPfMaster(c25)); localStorage.setItem(FY[2025].key, JSON.stringify(recordsByFY[2025])); }
+            if (Array.isArray(c26) && !(isPending(2026) && hasLocalCopy(2026))) {
                 setRecords(2026, mergeExcelPfMaster(c26)); localStorage.setItem(FY[2026].key, JSON.stringify(recordsByFY[2026]));
             } else if (!hasLoadedFromCloud && Array.isArray(c25) && !getSavedRecords(2026)) {
                 setRecords(2026, buildFromPrevYear(recordsByFY[2025])); localStorage.setItem(FY[2026].key, JSON.stringify(recordsByFY[2026]));
@@ -1156,7 +1175,7 @@ function initFirebaseSync() {
             if (currentUser && (!Array.isArray(c26) || chainChanged) && !hasLoadedFromCloud) pushRecordsToCloud(recordsByFY[2026], 2026);
             else if (currentUser && chainChanged && !echo) pushRecordsToCloud(recordsByFY[2026], 2026);
 
-            document.getElementById("syncStatus").textContent =
+            if (!isPending(2025) && !isPending(2026)) document.getElementById("syncStatus").textContent =
                 `Synced — 2025–26: ${recordsByFY[2025].length} · 2026–27: ${recordsByFY[2026].length} staff PF records`;
 
             if (!echo) {
@@ -1165,6 +1184,7 @@ function initFirebaseSync() {
                 onPfEmployeeSelect();
             }
             hasLoadedFromCloud = true;
+            flushPendingToCloud();
             if (window.staffRefresh) staffRefresh();
         },
         err => {
