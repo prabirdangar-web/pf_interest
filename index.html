@@ -439,6 +439,8 @@
     // Single shared document, matching the rest of the TFHS suite's storage pattern:
     // one document per tool at /tfhs/{toolName}, holding the whole dataset as a field.
     const pfDocRef = db.doc("tfhs/pfInterest");
+    // Per-employee read-only copies for the Staff View (one doc per identity-pair, id = SHA-256, never listable).
+    const pfStaffRef = db.collection("pfStaffLedger");
     // FY 2026-27 lives in its own field of the same document; the 2025-26 `records` field is never touched.
     const CLOUD_FIELD = 'records2627';
     let currentUser = null;
@@ -545,6 +547,14 @@ let monthlyRoiCache = Array(12).fill(7.1);
 let intOverrideCache = null;
 let salNoteCache = Array(12).fill('');   // per-month note from Salary Portal fetch: '' | 'nogen:<col>' | 'noemp:<col>'
 
+/* ---- Staff View lookup keys: id = SHA-256 of two identity details (nothing guessable, no listing) ---- */
+function pfNorm(f, v) { v = (v == null ? '' : String(v)).trim(); if (f === 'dob') return v; if (f === 'mob') return v.replace(/\D/g, '').slice(-10); return v.replace(/\s+/g, '').toUpperCase(); }
+async function pfSha(str) {
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('TFHS-PF-v1|' + str));
+    return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+function pfPairId(fa, va, fb, vb) { if (fa > fb) { [fa, va, fb, vb] = [fb, vb, fa, va]; } return pfSha(fa + '=' + va + '|' + fb + '=' + vb); }
+
 function getSavedRecords(fy = currentFY) {
     try {
         const raw = localStorage.getItem(FY[fy].key);
@@ -594,7 +604,8 @@ function pushRecordsToCloud(records, fy = currentFY) {
         updatedBy: currentUser.email
     }, { merge: true }).then(() => {
         localStorage.removeItem(PEND_KEY(fy));
-        document.getElementById("syncStatus").textContent = "✓ " + FY[fy].label + " saved to cloud — staff view updated";
+        document.getElementById("syncStatus").textContent = "✓ " + FY[fy].label + " saved to cloud";
+        schedulePublish();
     }).catch(err => {
         localStorage.setItem(PEND_KEY(fy), '1');
         console.error("Firestore save error:", err);
@@ -614,7 +625,8 @@ function pushAllToCloud() {
         updatedBy: currentUser.email
     }, { merge: true }).then(() => {
         localStorage.removeItem(PEND_KEY(2025)); localStorage.removeItem(PEND_KEY(2026));
-        document.getElementById("syncStatus").textContent = "✓ All years saved to cloud — staff view updated";
+        document.getElementById("syncStatus").textContent = "✓ All years saved to cloud";
+        schedulePublish();
     }).catch(err => {
         console.error("Firestore save error:", err);
         document.getElementById("syncStatus").textContent = "⚠ Cloud save failed (" + (err.code || err.message) + ")";
@@ -1167,6 +1179,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ---------- Firebase Auth & Firestore Sync ----------
 
 function initFirebaseSync() {
+    if (IS_STAFF_VIEW()) return;   // staff view reads only its own pfStaffLedger document
     auth.onAuthStateChanged(user => {
         currentUser = user;
         try { if (user) localStorage.setItem('TFHS_PF_ADMIN', '1'); else localStorage.removeItem('TFHS_PF_ADMIN'); } catch(e) {}
@@ -1256,14 +1269,58 @@ function handleAuthAction() {
         });
 }
 
+/* Publishes one sanitized copy of each employee's ledger data to pfStaffLedger (what Staff View reads). */
+function schedulePublish() { clearTimeout(window._pubT); window._pubT = setTimeout(() => publishStaffLedgers().catch(e => console.warn('Staff publish failed', e)), 3000); }
+async function publishStaffLedgers() {
+    if (!currentUser || IS_STAFF_VIEW()) return null;
+    const sal = new Map();
+    try {
+        const snap = await salaryPortalRef.get();
+        const months = (snap.data() || {}).months || {};
+        const NM = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+        const idx = k => { const q = k.split('-'); return parseInt(q[1], 10) * 12 + NM.indexOf(q[0]); };
+        Object.keys(months).sort((a, b) => idx(a) - idx(b)).forEach(k => (months[k] || []).forEach(e => { if (e.emp_code) sal.set(String(e.emp_code).trim().toUpperCase(), e); }));
+    } catch (e) { console.warn('Salary data unavailable for staff keys', e); }
+    const slim = r => r ? JSON.parse(JSON.stringify({
+        name: r.name, designation: r.designation, ngipf: r.ngipf, iosms: r.iosms, ob: r.ob, defaultDepAfter: r.defaultDepAfter, roi: r.roi,
+        monthlyDepWithin: r.monthlyDepWithin, monthlyDepAfter: r.monthlyDepAfter, monthlyWd: r.monthlyWd, monthlyRoi: r.monthlyRoi,
+        interestOverride: r.interestOverride === undefined ? null : r.interestOverride, dor: r.dor, termDate: r.termDate })) : null;
+    const emps = new Map();
+    [2025, 2026].forEach(fy => (recordsByFY[fy] || []).forEach(r => { const k = _pfKey(r.name); if (!emps.has(k)) emps.set(k, {}); emps.get(k)['r' + fy] = r; }));
+    const writes = new Map();
+    for (const e of emps.values()) {
+        const latest = e.r2026 || e.r2025, sr = sal.get(String(latest.iosms || '').trim().toUpperCase());
+        const vals = {
+            code: pfNorm('code', latest.iosms), ngipf: pfNorm('ngipf', latest.ngipf),
+            dob: pfNorm('dob', latest.dob || (sr && sr.dob)), pan: pfNorm('pan', latest.pan || (sr && sr.pan)), mob: pfNorm('mob', latest.mob || (sr && sr.mob_no))
+        };
+        const fields = Object.keys(vals).filter(f => vals[f]).sort();
+        const payload = { r2025: slim(e.r2025), r2026: slim(e.r2026) };
+        for (let i = 0; i < fields.length; i++) for (let j = i + 1; j < fields.length; j++)
+            writes.set(await pfPairId(fields[i], vals[fields[i]], fields[j], vals[fields[j]]), payload);
+    }
+    const idsRef = db.doc('tfhs/pfStaffIds');
+    const old = ((await idsRef.get()).data() || {}).ids || [];
+    const ids = [...writes.keys()];
+    const ops = ids.map(id => ({ id, del: false })).concat(old.filter(id => !writes.has(id)).map(id => ({ id, del: true })));
+    for (let i = 0; i < ops.length; i += 400) {
+        const b = db.batch();
+        ops.slice(i, i + 400).forEach(o => o.del ? b.delete(pfStaffRef.doc(o.id)) : b.set(pfStaffRef.doc(o.id), { ...writes.get(o.id), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }));
+        await b.commit();
+    }
+    await idsRef.set({ ids, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    document.getElementById("syncStatus").textContent = "✓ Saved to cloud — Staff View updated for " + emps.size + " employees";
+    return { employees: emps.size, docs: ids.length };
+}
+
 function uploadAllNow() {
     if (!currentUser) { alert("Sign in as admin first, then click Upload to Cloud."); return; }
     persistCurrentPfRecord(false);
-    pushAllToCloud().then(() => pfDocRef.get({ source: 'server' })).then(snap => {
+    pushAllToCloud().then(() => publishStaffLedgers()).then(pub => pfDocRef.get({ source: 'server' }).then(snap => ({ snap, pub }))).then(({ snap, pub }) => {
         const d = snap.data() || {};
         const n25 = (d.records || []).length, n26 = (d.records2627 || []).length;
         const t = d.updatedAt && d.updatedAt.toDate ? d.updatedAt.toDate().toLocaleString('en-IN') : '?';
-        alert('✓ Cloud verified.\n2025–26: ' + n25 + ' records\n2026–27: ' + n26 + ' records\nLast written: ' + t + ' by ' + (d.updatedBy || '?') + '\n\nStaff on other devices will now see this after a refresh.');
+        alert('✓ Cloud verified.\nStaff View published for ' + (pub ? pub.employees : 0) + ' employees.\n2025–26: ' + n25 + ' records\n2026–27: ' + n26 + ' records\nLast written: ' + t + ' by ' + (d.updatedBy || '?') + '\n\nStaff on other devices will now see this after a refresh.');
     }).catch(err => alert('✗ Upload FAILED: ' + (err.code || err.message) + '\n\nThe cloud still has the OLD data. If this says permission-denied, the Firestore rules do not allow this account to write.'));
 }
 
@@ -1637,6 +1694,7 @@ function printPFStatement() { printLedger(); }
     return '';
   }
 
+  let staffDoc = null;
   window.svVerify = async function () {
     const err = $('svErr'); err.textContent = '';
     let lock = getLock();
@@ -1645,23 +1703,15 @@ function printPFStatement() { printLedger(); }
     if (f1 === f2) { err.textContent = 'Please choose two different identity details.'; return; }
     const v1 = norm(f1, $('svV1').value), v2 = norm(f2, $('svV2').value);
     if (!v1 || !v2) { err.textContent = 'Please fill in both details.'; return; }
-    if (!window._cloudReady) {
-      err.textContent = window._cloudErr
-        ? 'Cannot load the latest PF data from the cloud (' + window._cloudErr + '). Please check internet, or tell the Headmaster\'s office.'
-        : 'Loading the latest PF data from the cloud… please wait a few seconds and try again.';
+    let doc = null;
+    try {
+      const snap = await pfStaffRef.doc(await pfPairId(f1, v1, f2, v2)).get();
+      if (snap.exists) doc = snap.data();
+    } catch (e) {
+      err.textContent = 'Cannot load the latest PF data (' + (e.code || e.message) + '). Please check your internet and try again.';
       return;
     }
-    const cands = candidates();
-    if (!cands.size) { err.textContent = 'PF data is still loading. Please wait a moment and try again.'; return; }
-    const sal = await loadSalary();
-    let found = null;
-    cands.forEach((rec, k) => {
-      if (found) return;
-      const s = sal.get(String(rec.iosms || '').trim().toUpperCase());
-      const a = fval(rec, s, f1), b = fval(rec, s, f2);
-      if (a && b && a === v1 && b === v2) found = k;
-    });
-    if (!found) {
+    if (!doc) {
       lock.n = (lock.n || 0) + 1;
       if (lock.n >= 5) lock = { n: 0, until: Date.now() + 5 * 60000 };
       setLock(lock);
@@ -1669,15 +1719,15 @@ function printPFStatement() { printLedger(); }
       return;
     }
     setLock({ n: 0, until: 0 });
-    key = found; $('svV1').value = ''; $('svV2').value = '';
+    staffDoc = doc; key = 'ok'; $('svV1').value = ''; $('svV2').value = '';
     curFY = null; show();
   };
 
-  window.svLogout = function () { key = null; $('svView').style.display = 'none'; $('svGate').style.display = ''; };
+  window.svLogout = function () { key = null; staffDoc = null; $('svView').style.display = 'none'; $('svGate').style.display = ''; };
   window.svSelectFY = function (fy) { curFY = fy; show(); };
-  window.staffRefresh = function () { if (key) show(); };
+  window.staffRefresh = function () { };
 
-  const recFor = fy => (recordsByFY[fy] || []).find(r => _pfKey(r.name) === key);
+  const recFor = fy => (staffDoc && staffDoc['r' + fy]) || null;
   const money = v => Math.round(v).toLocaleString('en-IN');
 
   function show() {
@@ -1688,7 +1738,8 @@ function printPFStatement() { printLedger(); }
     const latest = recFor(years[years.length - 1]);
     const nm = String(latest.name || '').replace(/\s*;.*$/, '').replace(/\s+/g, ' ').trim().toUpperCase();
     $('svName').textContent = nm;
-    const stamp = window._cloudStamp ? ' · Data last updated: ' + window._cloudStamp.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+    const stampD = staffDoc && staffDoc.updatedAt && staffDoc.updatedAt.toDate ? staffDoc.updatedAt.toDate() : null;
+    const stamp = stampD ? ' · Data last updated: ' + stampD.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '';
     $('svMeta').textContent = fullDesig(latest.designation || deriveDesignation(latest.name)) + ' · NGIPF A/C: ' + (latest.ngipf || 'N.A.') + ' · Employee Code: ' + (latest.iosms || 'N.A.') + stamp;
     $('svSum').innerHTML = '<thead><tr><th>Financial Year</th><th>Opening Balance (₹)</th><th>Total Deposit (₹)</th><th>Interest (₹)</th><th>Withdrawals (₹)</th><th>Closing Balance (₹)</th></tr></thead><tbody>' +
       years.map(fy => { const s = simulateFY(recFor(fy), FY[fy].start); return `<tr class="${fy === curFY ? 'cur' : ''}"><td>${FY[fy].label}</td><td>${money(s.ob)}</td><td>${money(s.dep)}</td><td>${money(s.interest)}</td><td>${money(s.wd)}</td><td><b>${money(s.cb)}</b></td></tr>`; }).join('') + '</tbody>';
