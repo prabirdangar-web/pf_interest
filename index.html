@@ -425,6 +425,24 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script>
+/* Fallback 1: if Google's gstatic CDN is blocked/slow, load the same Firebase SDK from jsDelivr. */
+(function(){
+  var need = [];
+  if (typeof firebase === 'undefined') need = ['app','auth','firestore'];
+  else { if (!firebase.auth) need.push('auth'); if (!firebase.firestore) need.push('firestore'); }
+  need.forEach(function(n){ document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.13.0/firebase-'+n+'-compat.js"><\/script>'); });
+})();
+</script>
+<script>
+/* Fallback 2: cdnjs. */
+(function(){
+  var need = [];
+  if (typeof firebase === 'undefined') need = ['app','auth','firestore'];
+  else { if (!firebase.auth) need.push('auth'); if (!firebase.firestore) need.push('firestore'); }
+  need.forEach(function(n){ document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-'+n+'-compat.min.js"><\/script>'); });
+})();
+</script>
+<script>
     const firebaseConfig = {
         apiKey: "AIzaSyCiqQFsnbSi6eCgUI_W3NTybzIkRmCI_54",
         authDomain: "tfhs-portal.firebaseapp.com",
@@ -1707,6 +1725,7 @@ function printPFStatement() { printLedger(); }
     if (f1 === f2) { err.textContent = 'Please choose two different identity details.'; return; }
     const v1 = norm(f1, $('svV1').value), v2 = norm(f2, $('svV2').value);
     if (!v1 || !v2) { err.textContent = 'Please fill in both details.'; return; }
+    if (typeof firebase === 'undefined' || !firebase.firestore) { err.textContent = 'Could not load the Google Firebase library (blocked or no internet). Please try another browser or network, or turn off any ad-blocker / VPN for this page.'; return; }
     let doc = null;
     try {
       const snap = await firebase.firestore().collection('pfStaffLedger').doc(await pfPairId(f1, v1, f2, v2)).get();
