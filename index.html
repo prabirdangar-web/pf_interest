@@ -606,7 +606,7 @@ function pushAllToCloud() {
     if (!currentUser) return;
     const writeId = clientSessionId + '_' + (++writeCounter);
     sentWriteIds.add(writeId);
-    pfDocRef.set({
+    return pfDocRef.set({
         [FY[2025].field]: recordsByFY[2025],
         [FY[2026].field]: recordsByFY[2026],
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -617,7 +617,8 @@ function pushAllToCloud() {
         document.getElementById("syncStatus").textContent = "✓ All years saved to cloud — staff view updated";
     }).catch(err => {
         console.error("Firestore save error:", err);
-        document.getElementById("syncStatus").textContent = "⚠ Cloud save failed — check connection";
+        document.getElementById("syncStatus").textContent = "⚠ Cloud save failed (" + (err.code || err.message) + ")";
+        throw err;
     });
 }
 
@@ -1200,12 +1201,14 @@ function initFirebaseSync() {
                 onPfEmployeeSelect();
             }
             hasLoadedFromCloud = true;
+            window._cloudReady = true; window._cloudErr = null;
             flushPendingToCloud();
             if (window.staffRefresh) staffRefresh();
         },
         err => {
             console.error("Firestore sync error:", err);
-            document.getElementById("syncStatus").textContent = "⚠ Cloud sync error — check connection";
+            window._cloudErr = err.code || err.message || 'unknown';
+            document.getElementById("syncStatus").textContent = "⚠ Cloud sync error (" + window._cloudErr + ")";
         }
     );
 }
@@ -1256,7 +1259,12 @@ function handleAuthAction() {
 function uploadAllNow() {
     if (!currentUser) { alert("Sign in as admin first, then click Upload to Cloud."); return; }
     persistCurrentPfRecord(false);
-    pushAllToCloud();
+    pushAllToCloud().then(() => pfDocRef.get({ source: 'server' })).then(snap => {
+        const d = snap.data() || {};
+        const n25 = (d.records || []).length, n26 = (d.records2627 || []).length;
+        const t = d.updatedAt && d.updatedAt.toDate ? d.updatedAt.toDate().toLocaleString('en-IN') : '?';
+        alert('✓ Cloud verified.\n2025–26: ' + n25 + ' records\n2026–27: ' + n26 + ' records\nLast written: ' + t + ' by ' + (d.updatedBy || '?') + '\n\nStaff on other devices will now see this after a refresh.');
+    }).catch(err => alert('✗ Upload FAILED: ' + (err.code || err.message) + '\n\nThe cloud still has the OLD data. If this says permission-denied, the Firestore rules do not allow this account to write.'));
 }
 
 function handleSignOut() {
@@ -1637,6 +1645,12 @@ function printPFStatement() { printLedger(); }
     if (f1 === f2) { err.textContent = 'Please choose two different identity details.'; return; }
     const v1 = norm(f1, $('svV1').value), v2 = norm(f2, $('svV2').value);
     if (!v1 || !v2) { err.textContent = 'Please fill in both details.'; return; }
+    if (!window._cloudReady) {
+      err.textContent = window._cloudErr
+        ? 'Cannot load the latest PF data from the cloud (' + window._cloudErr + '). Please check internet, or tell the Headmaster\'s office.'
+        : 'Loading the latest PF data from the cloud… please wait a few seconds and try again.';
+      return;
+    }
     const cands = candidates();
     if (!cands.size) { err.textContent = 'PF data is still loading. Please wait a moment and try again.'; return; }
     const sal = await loadSalary();
