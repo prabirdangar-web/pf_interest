@@ -1725,13 +1725,29 @@ function printPFStatement() { printLedger(); }
     if (f1 === f2) { err.textContent = 'Please choose two different identity details.'; return; }
     const v1 = norm(f1, $('svV1').value), v2 = norm(f2, $('svV2').value);
     if (!v1 || !v2) { err.textContent = 'Please fill in both details.'; return; }
-    if (typeof firebase === 'undefined' || !firebase.firestore) { err.textContent = 'Could not load the Google Firebase library (blocked or no internet). Please try another browser or network, or turn off any ad-blocker / VPN for this page.'; return; }
+    /* Staff lookup uses the plain Firestore REST address (no Firebase script needed): one GET of one document. */
+    const FS_KEY = 'AIzaSyCiqQFsnbSi6eCgUI_W3NTybzIkRmCI_54';
+    const fsDec = v => {
+      if (v == null) return null;
+      if ('stringValue' in v) return v.stringValue;
+      if ('integerValue' in v) return Number(v.integerValue);
+      if ('doubleValue' in v) return Number(v.doubleValue);
+      if ('booleanValue' in v) return v.booleanValue;
+      if ('nullValue' in v) return null;
+      if ('timestampValue' in v) { const d = new Date(v.timestampValue); return { toDate: () => d }; }
+      if ('arrayValue' in v) return (v.arrayValue.values || []).map(fsDec);
+      if ('mapValue' in v) { const o = {}; const f = v.mapValue.fields || {}; Object.keys(f).forEach(k => o[k] = fsDec(f[k])); return o; }
+      return null;
+    };
     let doc = null;
     try {
-      const snap = await firebase.firestore().collection('pfStaffLedger').doc(await pfPairId(f1, v1, f2, v2)).get();
-      if (snap.exists) doc = snap.data();
+      const id = await pfPairId(f1, v1, f2, v2);
+      const res = await fetch('https://firestore.googleapis.com/v1/projects/tfhs-portal/databases/(default)/documents/pfStaffLedger/' + id + '?key=' + FS_KEY, { cache: 'no-store' });
+      if (res.status === 404) doc = null;
+      else if (!res.ok) { err.textContent = 'Cannot load the latest PF data (server said ' + res.status + '). Please try again later.'; return; }
+      else { const j = await res.json(); doc = {}; Object.keys(j.fields || {}).forEach(k => doc[k] = fsDec(j.fields[k])); }
     } catch (e) {
-      err.textContent = 'Cannot load the latest PF data (' + (e.code || e.message) + '). Please check your internet and try again.';
+      err.textContent = 'Cannot reach the server (' + (e.message || e) + '). Please check your internet and try again.';
       return;
     }
     if (!doc) {
