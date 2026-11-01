@@ -433,14 +433,16 @@
         messagingSenderId: "316041012204",
         appId: "1:316041012204:web:04ee8b19374c60f63716c9"
     };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
+    try { if (!firebase.apps.length) firebase.initializeApp(firebaseConfig); } catch (e) { console.warn('Firebase init', e); }
+    // Auth is only needed by the admin; a blocked/failed auth script must never stop the Staff View.
+    let auth = null;
+    try { auth = firebase.auth ? firebase.auth() : null; } catch (e) { console.warn('Firebase auth unavailable', e); }
     const db = firebase.firestore();
     // Single shared document, matching the rest of the TFHS suite's storage pattern:
     // one document per tool at /tfhs/{toolName}, holding the whole dataset as a field.
     const pfDocRef = db.doc("tfhs/pfInterest");
     // Per-employee read-only copies for the Staff View (one doc per identity-pair, id = SHA-256, never listable).
-    const pfStaffRef = db.collection("pfStaffLedger");
+    // (Staff View collection "pfStaffLedger" is accessed directly via firebase.firestore() where used.)
     // FY 2026-27 lives in its own field of the same document; the 2025-26 `records` field is never touched.
     const CLOUD_FIELD = 'records2627';
     let currentUser = null;
@@ -1179,7 +1181,8 @@ window.addEventListener('DOMContentLoaded', () => {
 // ---------- Firebase Auth & Firestore Sync ----------
 
 function initFirebaseSync() {
-    if (IS_STAFF_VIEW()) return;   // staff view reads only its own pfStaffLedger document
+    if (IS_STAFF_VIEW()) return;
+    if (!auth) { document.getElementById('syncStatus').textContent = '⚠ Firebase sign-in script did not load — reload the page'; return; }   // staff view reads only its own pfStaffLedger document
     auth.onAuthStateChanged(user => {
         currentUser = user;
         try { if (user) localStorage.setItem('TFHS_PF_ADMIN', '1'); else localStorage.removeItem('TFHS_PF_ADMIN'); } catch(e) {}
@@ -1258,6 +1261,7 @@ function handleAuthAction() {
         alert("Enter both the admin email and password to sign in.");
         return;
     }
+    if (!auth) { alert('Firebase sign-in script did not load. Reload the page and try again.'); return; }
     auth.signInWithEmailAndPassword(email, password)
         .then(() => {
             document.getElementById("authPassword").value = "";
@@ -1305,7 +1309,7 @@ async function publishStaffLedgers() {
     const ops = ids.map(id => ({ id, del: false })).concat(old.filter(id => !writes.has(id)).map(id => ({ id, del: true })));
     for (let i = 0; i < ops.length; i += 400) {
         const b = db.batch();
-        ops.slice(i, i + 400).forEach(o => o.del ? b.delete(pfStaffRef.doc(o.id)) : b.set(pfStaffRef.doc(o.id), { ...writes.get(o.id), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }));
+        ops.slice(i, i + 400).forEach(o => o.del ? b.delete(firebase.firestore().collection('pfStaffLedger').doc(o.id)) : b.set(firebase.firestore().collection('pfStaffLedger').doc(o.id), { ...writes.get(o.id), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }));
         await b.commit();
     }
     await idsRef.set({ ids, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
@@ -1325,7 +1329,7 @@ function uploadAllNow() {
 }
 
 function handleSignOut() {
-    auth.signOut();
+    if (auth) auth.signOut();
 }
 </script>
 
@@ -1705,7 +1709,7 @@ function printPFStatement() { printLedger(); }
     if (!v1 || !v2) { err.textContent = 'Please fill in both details.'; return; }
     let doc = null;
     try {
-      const snap = await pfStaffRef.doc(await pfPairId(f1, v1, f2, v2)).get();
+      const snap = await firebase.firestore().collection('pfStaffLedger').doc(await pfPairId(f1, v1, f2, v2)).get();
       if (snap.exists) doc = snap.data();
     } catch (e) {
       err.textContent = 'Cannot load the latest PF data (' + (e.code || e.message) + '). Please check your internet and try again.';
