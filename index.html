@@ -287,6 +287,7 @@
 
         <div class="topbar">
             <h1>Unified ROPA &amp; PF Management Dashboard</h1>
+            <button type="button" class="btn-tiny" onclick="uploadAllNow()" title="Push 2025-26 and 2026-27 data from this browser to the cloud so staff see it">⬆ Upload to Cloud</button>
             <a href="?staff=1" target="_blank" class="btn-tiny" style="text-decoration:none;" title="Open the staff self-service view (share this link with staff)">👤 Staff View</a>
             <div class="auth-bar" id="authBar">
                 <span id="authStatus" class="auth-status signed-out">Checking sign-in status…</span>
@@ -552,7 +553,9 @@ function getSavedRecords(fy = currentFY) {
     } catch (_) { return null; }
 }
 
+const IS_STAFF_VIEW = () => document.documentElement.classList.contains('staff-mode');
 function saveRecordsToStorage(records, pushToCloud = true, fy = currentFY) {
+    if (IS_STAFF_VIEW()) return;   // staff view is read-only
     localStorage.setItem(FY[fy].key, JSON.stringify(records));
     if (pushToCloud) queueCloudSave(records, fy);
     // 2025-26 changed -> its closing balance feeds 2026-27 opening balance
@@ -568,7 +571,7 @@ function queueCloudSave(records, fy = currentFY) {
 /* Edits made while signed out are flagged "pending" (survives reload) so they are pushed once signed in,
    and the cloud copy never overwrites them in the meantime. */
 const PEND_KEY = fy => 'TFHS_PF_PENDING_' + fy;
-const isPending = fy => localStorage.getItem(PEND_KEY(fy)) === '1';
+const isPending = fy => !IS_STAFF_VIEW() && localStorage.getItem(PEND_KEY(fy)) === '1';
 const hasLocalCopy = fy => recordsByFY[fy].length > 0;
 function flushPendingToCloud() {
     if (!currentUser) return;
@@ -576,6 +579,7 @@ function flushPendingToCloud() {
 }
 
 function pushRecordsToCloud(records, fy = currentFY) {
+    if (IS_STAFF_VIEW()) return;
     if (!currentUser) {
         localStorage.setItem(PEND_KEY(fy), '1');
         document.getElementById("syncStatus").textContent = "⚠ Not signed in — " + FY[fy].label + " changes NOT in cloud yet (staff cannot see them). Sign in to upload.";
@@ -1023,6 +1027,7 @@ function calculatePF2025_26() {
 }
 
 function persistCurrentPfRecord(showStatus = false) {
+    if (IS_STAFF_VIEW()) return;
     const idx = window._pfCurrentIdx !== undefined ? Number(window._pfCurrentIdx) : Number(document.getElementById('pfEmpSelect').value);
     if (!Number.isInteger(idx) || !activeStaffRecords[idx]) return;
 
@@ -1188,7 +1193,8 @@ function initFirebaseSync() {
             if (!isPending(2025) && !isPending(2026)) document.getElementById("syncStatus").textContent =
                 `Synced — 2025–26: ${recordsByFY[2025].length} · 2026–27: ${recordsByFY[2026].length} staff PF records`;
 
-            if (!echo) {
+            try { window._cloudStamp = data.updatedAt && data.updatedAt.toDate ? data.updatedAt.toDate() : null; } catch (e) {}
+            if (!echo && !IS_STAFF_VIEW()) {
                 activeStaffRecords = recordsByFY[currentFY];
                 initPfDropdown(currentName);
                 onPfEmployeeSelect();
@@ -1245,6 +1251,12 @@ function handleAuthAction() {
         .catch(err => {
             alert("Sign-in failed: " + err.message);
         });
+}
+
+function uploadAllNow() {
+    if (!currentUser) { alert("Sign in as admin first, then click Upload to Cloud."); return; }
+    persistCurrentPfRecord(false);
+    pushAllToCloud();
 }
 
 function handleSignOut() {
@@ -1662,7 +1674,8 @@ function printPFStatement() { printLedger(); }
     const latest = recFor(years[years.length - 1]);
     const nm = String(latest.name || '').replace(/\s*;.*$/, '').replace(/\s+/g, ' ').trim().toUpperCase();
     $('svName').textContent = nm;
-    $('svMeta').textContent = fullDesig(latest.designation || deriveDesignation(latest.name)) + ' · NGIPF A/C: ' + (latest.ngipf || 'N.A.') + ' · Employee Code: ' + (latest.iosms || 'N.A.');
+    const stamp = window._cloudStamp ? ' · Data last updated: ' + window._cloudStamp.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+    $('svMeta').textContent = fullDesig(latest.designation || deriveDesignation(latest.name)) + ' · NGIPF A/C: ' + (latest.ngipf || 'N.A.') + ' · Employee Code: ' + (latest.iosms || 'N.A.') + stamp;
     $('svSum').innerHTML = '<thead><tr><th>Financial Year</th><th>Opening Balance (₹)</th><th>Total Deposit (₹)</th><th>Interest (₹)</th><th>Withdrawals (₹)</th><th>Closing Balance (₹)</th></tr></thead><tbody>' +
       years.map(fy => { const s = simulateFY(recFor(fy), FY[fy].start); return `<tr class="${fy === curFY ? 'cur' : ''}"><td>${FY[fy].label}</td><td>${money(s.ob)}</td><td>${money(s.dep)}</td><td>${money(s.interest)}</td><td>${money(s.wd)}</td><td><b>${money(s.cb)}</b></td></tr>`; }).join('') + '</tbody>';
     $('svTabs').innerHTML = years.map(fy => `<button type="button" class="${fy === curFY ? 'active' : ''}" onclick="svSelectFY(${fy})">FY ${FY[fy].label}</button>`).join('');
