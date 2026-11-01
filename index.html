@@ -238,6 +238,7 @@
     <input id="svV2" autocomplete="off" onkeydown="if(event.key==='Enter')svVerify();">
     <button type="button" class="go" onclick="svVerify()">View My PF Ledger</button>
     <div id="svErr"></div>
+    <div style="font-size:10px;color:#94a3b8;margin-top:8px;">Build 2026-11-01 · direct lookup</div>
   </div>
   <div id="svView" style="display:none;">
     <div class="sv-top">
@@ -1717,6 +1718,12 @@ function printPFStatement() { printLedger(); }
   }
 
   let staffDoc = null;
+  /* Self-contained key derivation (must match pfPairId used by the admin publisher). */
+  async function sha(str) {
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('TFHS-PF-v1|' + str));
+    return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
+  }
+  function pairId(fa, va, fb, vb) { if (fa > fb) { const tf = fa, tv = va; fa = fb; va = vb; fb = tf; vb = tv; } return sha(fa + '=' + va + '|' + fb + '=' + vb); }
   window.svVerify = async function () {
     const err = $('svErr'); err.textContent = '';
     let lock = getLock();
@@ -1741,7 +1748,7 @@ function printPFStatement() { printLedger(); }
     };
     let doc = null;
     try {
-      const id = await pfPairId(f1, v1, f2, v2);
+      const id = await pairId(f1, v1, f2, v2);
       const res = await fetch('https://firestore.googleapis.com/v1/projects/tfhs-portal/databases/(default)/documents/pfStaffLedger/' + id + '?key=' + FS_KEY, { cache: 'no-store' });
       if (res.status === 404) doc = null;
       else if (!res.ok) { err.textContent = 'Cannot load the latest PF data (server said ' + res.status + '). Please try again later.'; return; }
@@ -1759,7 +1766,12 @@ function printPFStatement() { printLedger(); }
     }
     setLock({ n: 0, until: 0 });
     staffDoc = doc; key = 'ok'; $('svV1').value = ''; $('svV2').value = '';
-    curFY = null; show();
+    curFY = null;
+    try { show(); }
+    catch (e) {
+      $('svGate').style.display = ''; $('svView').style.display = 'none';
+      err.textContent = 'Could not display the ledger (' + (e.message || e) + '). The page may be an old copy — please reload fully (Ctrl+F5).';
+    }
   };
 
   window.svLogout = function () { key = null; staffDoc = null; $('svView').style.display = 'none'; $('svGate').style.display = ''; };
