@@ -207,6 +207,15 @@
         #svLedger .lp { height: auto !important; min-width: 980px; padding: 4px 2px 8px; page-break-after: auto; }
         .sv-note { font-size: 11px; color: #64748b; margin-top: 8px; }
 </style>
+<script>
+/* Staff view is the DEFAULT. The admin dashboard opens only with ?admin=1 (first time) or on a browser where the admin has signed in. */
+(function(){
+  var u = location.search + location.hash, flag = false;
+  try { flag = localStorage.getItem('TFHS_PF_ADMIN') === '1'; } catch(e) {}
+  var admin = /[?&#]admin/.test(u) || flag;
+  if (!admin || /[?&#]staff/.test(u)) document.documentElement.classList.add('staff-mode');
+})();
+</script>
 </head>
 <body>
 
@@ -1154,6 +1163,7 @@ window.addEventListener('DOMContentLoaded', () => {
 function initFirebaseSync() {
     auth.onAuthStateChanged(user => {
         currentUser = user;
+        try { if (user) localStorage.setItem('TFHS_PF_ADMIN', '1'); else localStorage.removeItem('TFHS_PF_ADMIN'); } catch(e) {}
         updateAuthUI();
         if (user) flushPendingToCloud();
     });
@@ -1565,7 +1575,6 @@ function printPFStatement() { printLedger(); }
 <script>
 /* ===== Staff self-service PF ledger (two-factor, year-wise) ===== */
 (function () {
-  if (/[?&#]staff/.test(location.search + location.hash)) document.documentElement.classList.add('staff-mode');
   const LOCK_KEY = 'TFHS_PF_SV_LOCK';
   const FACT = { code:{t:'text',p:'e.g. JVMK0539'}, pan:{t:'text',p:'e.g. AHGPD9070Q'}, dob:{t:'date',p:''}, mob:{t:'tel',p:'10-digit mobile number'}, ngipf:{t:'text',p:'e.g. ESS199702748'} };
   let salaryMap = null, key = null, curFY = null;
